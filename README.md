@@ -6,7 +6,6 @@ Upload photos, scans or PDFs of set and lighting drawings marked up with coloure
 
 - `index.html` is the whole site. GitHub Pages serves it.
 - Drawings are stored in a Supabase database. The database checks the password on every request (`supabase-setup.sql`), so it is not stored in the page.
-- `example.jpg` and `example.json` are the Quidditch Stadium drawing, offered as an example while the database is empty.
 
 ## Setup
 

@@ -222,7 +222,6 @@ header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; pad
             <h2>Upload a marked-up drawing</h2>
             <p>Use a photo, scan or PDF of a plan where the lights are marked with coloured highlighter and a legend says what each colour means. Lightmark finds the marks and puts each colour on its own layer. Name the layers from your legend, then filter by wattage, bulb and cap.</p>
             <p class="note" id="emptynote">Loading drawings…</p>
-            <button class="btn" id="example" hidden>Add the Quidditch Stadium example</button>
           </div>
         </div>
       </div>
@@ -818,7 +817,6 @@ async function refresh() {
   const last = store('lm.cur');
   if (!current()) { S.cur = (S.drawings.find((x) => x.id === last) || S.drawings[0] || S.local[0] || {}).id || null; S.needFit = true; }
   $('emptynote').textContent = 'Drawings you upload here are shared with everyone who has the link and password.';
-  $('example').hidden = S.drawings.length > 0;
   if (S.renaming || S.confirmFolder || S.dragId || (document.activeElement && document.activeElement.id === 'dname-in')) return;
   if (!S.edit || !S.drawings.some((x) => x.id === S.cur)) render(); else { renderRail(); }
 }
@@ -843,15 +841,6 @@ async function checkForNewVersion() {
   const go = () => { if (busy()) return setTimeout(go, 5000); location.reload(); };
   toast('Lightmark has been updated. Reloading…', 2500); setTimeout(go, 2500);
 }
-$('example').onclick = async () => {
-  const b = $('example'); b.disabled = true; b.textContent = 'Adding the example…';
-  try {
-    const [im, data] = await Promise.all([loadImage('example.jpg'), fetch('example.json').then((r) => r.json())]);
-    const full = toCanvas(im, 3000);
-    await saveNew({ ...data, w: full.width, h: full.height }, full);
-  } catch { toast('Couldn’t add the example. Check example.jpg and example.json are next to index.html.'); }
-  b.disabled = false; b.textContent = 'Add the Quidditch Stadium example';
-};
 
 /* ---------- password gate ---------- */
 async function tryPass(p) {
