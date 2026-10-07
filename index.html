@@ -214,7 +214,7 @@ header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; pad
         <button class="btn small" id="zout" aria-label="Zoom out">−</button>
         <button class="btn small" id="clean" title="Grey out the original highlighter so only the layers you switch on show in colour">Clean view</button>
         <button class="btn small" id="labels">Labels</button>
-        <button class="btn small" id="move" hidden aria-pressed="false" title="When on, drag labels and lights to reposition them. Turn off to avoid moving them by accident.">Move labels: locked</button>
+        <button class="btn small" id="move" hidden aria-pressed="false" title="When on, drag labels and lights to reposition them. Turn off to avoid moving them by accident.">Move lights &amp; labels: locked</button>
         <button class="btn small" id="edit" hidden>Edit marks</button>
       </div>
       <div class="stage" id="stage">
@@ -392,7 +392,7 @@ function renderStage() {
   $('world').classList.toggle('clean', S.clean);
   $('clean').classList.toggle('on', S.clean); $('labels').classList.toggle('on', S.labels); $('edit').classList.toggle('on', S.edit);
   $('edit').hidden = !canEditDrawing(d); $('move').hidden = !canEditDrawing(d);
-  $('move').classList.toggle('on', S.move); $('move').textContent = S.move ? 'Move labels: on' : 'Move labels: locked'; $('move').setAttribute('aria-pressed', S.move);
+  $('move').classList.toggle('on', S.move); $('move').textContent = S.move ? 'Move lights & labels: on' : 'Move lights & labels: locked'; $('move').setAttribute('aria-pressed', S.move);
   $('stage').classList.toggle('moving', S.move);
   $('stage').classList.toggle('editing', S.edit);
   const svg = $('svg'); svg.setAttribute('viewBox', `0 0 ${d.w} ${d.h}`); svg.setAttribute('width', d.w); svg.setAttribute('height', d.h);
