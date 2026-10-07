@@ -653,7 +653,7 @@ async function redetect(d) {
 /* ---------- database (Supabase) ---------- */
 // Fill these in from Supabase > Project Settings > API. The anon key is designed to be public;
 // the password is checked by the database itself (see supabase-setup.sql).
-const CONFIG = { url: '__SUPABASE_URL__', key: '__SUPABASE_ANON_KEY__' };
+const CONFIG = { url: 'https://zkolfqjkxwluyrscdoba.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inprb2xmcWpreHdsdXlyc2Nkb2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNjcyMTgsImV4cCI6MjEwNjk0MzIxOH0.63V7u9XbdHQyKmHunhdNQB0Xqc_wPGl_keTjH-nPCsg' };
 const API = {
   pass: store('lm.pass') || '',
   configured() { return /^https:\/\//.test(CONFIG.url) && CONFIG.key.length > 20; },
