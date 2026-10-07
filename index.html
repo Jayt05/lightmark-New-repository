@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lightmark</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ccircle cx=%2216%22 cy=%2214%22 r=%229%22 fill=%22%23e9963f%22/%3E%3Crect x=%2212%22 y=%2223%22 width=%228%22 height=%225%22 rx=%221%22 fill=%22%23555%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a light-desk workbench. Drawings rail | stage (the plan, pan/zoom) | layer desk (fader-like layer rows + filter chips). Stacks on phones. */
+:root {
+  --bg: #eeefeb;
+  --panel: #f9f9f6;
+  --ink: #1c1f21;
+  --muted: #61666a;
+  --line: #d4d6d0;
+  --stage: #dfe1dc;
+  --accent: #b8650f;        /* tungsten amber */
+  --accent-ink: #fffaf2;
+  --accent-soft: #f3e3cf;
+  --danger: #b3261e;
+  --ok: #2f6b3a;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --font-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141618; --panel: #1c1f22; --ink: #e9e8e3; --muted: #9a9e9f; --line: #2e3236; --stage: #0e1011;
+  --accent: #e9963f; --accent-ink: #1a1206; --accent-soft: #3a2a17; --danger: #f2867d; --ok: #7cc58a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #141618; --panel: #1c1f22; --ink: #e9e8e3; --muted: #9a9e9f; --line: #2e3236; --stage: #0e1011;
+  --accent: #e9963f; --accent-ink: #1a1206; --accent-soft: #3a2a17; --danger: #f2867d; --ok: #7cc58a; color-scheme: dark }
+
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font-body); }
+* { box-sizing: border-box; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto 1fr; padding-inline: 16px; padding-block: 0 12px; gap: 12px; }
+header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-block: 12px 0; }
+.brand { font-family: var(--font-display); font-weight: 700; font-size: 26px; letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: baseline; gap: 10px; }
+.brand small { font: 500 12px var(--font-data); color: var(--muted); letter-spacing: 0; text-transform: none; }
+.spacer { flex: 1; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 7px 12px; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.small { padding: 4px 9px; font-size: 13px; }
+.btn.on { background: var(--accent-soft); border-color: var(--accent); }
+.btn.danger { color: var(--danger); }
+.btn[disabled] { opacity: .5; cursor: default; }
+
+.main { display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 12px; min-height: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-height: 0; overflow: auto; }
+.label { font: 600 11px var(--font-body); text-transform: uppercase; letter-spacing: .09em; color: var(--muted); }
+
+/* drawings rail */
+.rail { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.dwg { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; align-items: center; padding: 6px; border-radius: 6px; border: 1px solid transparent; background: none; text-align: left; width: 100%; }
+.dwg:hover { border-color: var(--line); }
+.dwg.sel { border-color: var(--accent); background: var(--accent-soft); }
+.dwg img { width: 56px; height: 42px; object-fit: cover; border-radius: 4px; background: var(--stage); display: block; }
+.dwg .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dwg .m { font: 12px var(--font-data); color: var(--muted); }
+
+/* stage */
+.stagewrap { display: grid; grid-template-rows: auto 1fr; min-height: 0; gap: 8px; }
+.tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.tools .title { font-family: var(--font-display); font-size: 22px; font-weight: 600; margin-right: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.stage { position: relative; overflow: hidden; background: var(--stage); border-radius: 8px; border: 1px solid var(--line); touch-action: none; min-height: 320px; cursor: grab; }
+.stage.editing { cursor: crosshair; }
+.stage.moving .mk text, .stage.moving .mk circle { cursor: move; }
+.mk text { cursor: default; }
+.gate { position: fixed; inset: 0; background: var(--bg); display: grid; place-items: center; padding: 16px; z-index: 10; }
+.gate form { display: grid; gap: 10px; width: min(340px, 100%); }
+.gate h1 { font-family: var(--font-display); font-size: 34px; text-transform: uppercase; letter-spacing: .02em; margin: 0; }
+.gate input { border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; background: var(--panel); }
+.gate .err { color: var(--danger); font-size: 13px; min-height: 1.2em; }
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.world img { display: block; max-width: none; user-select: none; -webkit-user-drag: none; transition: filter .2s; }
+.world.clean img { filter: grayscale(1) contrast(1.08) brightness(1.04); }
+.world svg { position: absolute; inset: 0; overflow: visible; }
+.mk circle.f { fill-opacity: .28; }
+.mk circle.r { fill: none; }
+.mk text { font-family: var(--font-data); font-weight: 500; paint-order: stroke; stroke: #fff; stroke-linejoin: round; }
+.mk.sel circle.s { fill: none; stroke: var(--ink); stroke-dasharray: 3 3; }
+.zoomnote { position: absolute; right: 10px; bottom: 10px; font: 12px var(--font-data); background: var(--panel); border: 1px solid var(--line); padding: 3px 7px; border-radius: 4px; color: var(--muted); pointer-events: none; }
+.empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; }
+.empty .box { max-width: 420px; display: grid; gap: 10px; justify-items: center; }
+.empty h2 { font-family: var(--font-display); font-size: 28px; margin: 0; text-wrap: balance; }
+.empty p { margin: 0; color: var(--muted); }
+
+/* layer desk */
+.desk { padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+.sect { display: grid; gap: 8px; }
+.sect-h { display: flex; align-items: center; gap: 8px; }
+.sect-h .label { flex: 1; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12px; font-weight: 600; }
+.layer { display: grid; grid-template-columns: auto 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.layer.off { opacity: .5; }
+.layer.active { border-color: var(--accent); }
+.layer .sw { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(0,0,0,.2); }
+.layer .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.layer .sp { font: 12px var(--font-data); color: var(--muted); }
+.layer .ct { font: 500 13px var(--font-data); font-variant-numeric: tabular-nums; color: var(--muted); }
+.switch { appearance: none; width: 30px; height: 18px; border-radius: 9px; background: var(--line); position: relative; margin: 0; cursor: pointer; transition: background .15s; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--panel); transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.switch:checked { background: var(--accent); }
+.switch:checked::after { transform: translateX(12px); }
+.ledit { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding-top: 6px; }
+.ledit label { display: grid; gap: 2px; font-size: 11px; color: var(--muted); }
+.ledit input, .ledit select { border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; background: var(--bg); width: 100%; min-width: 0; }
+.ledit input[type=color] { padding: 0; height: 28px; }
+.ledit .wide { grid-column: 1 / -1; }
+.ledit .row { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; background: var(--bg); font: 500 12px var(--font-data); }
+.chip.on { background: var(--accent-soft); border-color: var(--accent); }
+.chip.part { border-style: dashed; border-color: var(--accent); }
+.fgroup { display: grid; grid-template-columns: 64px 1fr; gap: 6px; align-items: start; }
+.fgroup > span { font-size: 12px; color: var(--muted); padding-top: 4px; }
+.note { font-size: 12px; color: var(--muted); }
+.markedit { display: grid; gap: 6px; padding: 8px; border: 1px dashed var(--accent); border-radius: 6px; }
+.markedit .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.markedit input, .markedit select { border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; background: var(--bg); min-width: 0; }
+
+/* progress + toast */
+.progress { position: fixed; inset: auto 16px calc(16px + env(safe-area-inset-bottom, 0px)) auto; width: min(360px, calc(100% - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0,0,0,.15); display: grid; gap: 6px; z-index: 5; }
+.progress ol { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.progress li.done { color: var(--muted); }
+.progress li.now { font-weight: 600; }
+.progress li.err { color: var(--danger); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 6px; z-index: 6; max-width: calc(100% - 32px); }
+.confirm { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+
+@media (max-width: 980px) {
+  .main { grid-template-columns: minmax(0, 1fr) 280px; }
+  .rail { grid-column: 1 / -1; flex-direction: row; overflow-x: auto; }
+  .dwg { width: 220px; flex: none; }
+}
+@media (max-width: 680px) {
+  .app { height: auto; }
+  .main { grid-template-columns: minmax(0, 1fr); }
+  .stage { height: 62vh; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate" hidden>
+  <form id="gateform">
+    <h1>Lightmark</h1>
+    <label for="pw" class="note">Enter the password to open the drawings.</label>
+    <input id="pw" type="password" autocomplete="current-password" required>
+    <div class="err" id="pwerr" role="alert"></div>
+    <button class="btn primary" type="submit">Open</button>
+  </form>
+</div>
+<div class="app">
+  <header class="bar">
+    <div class="brand">Lightmark <small>colour-coded light plans, by layer</small></div>
+    <div class="spacer"></div>
+    <span id="who" class="note"></span>
+    <input id="file" type="file" accept="image/*,application/pdf" multiple hidden>
+    <button id="upload" class="btn primary" hidden>Upload drawing</button>
+  </header>
+  <div class="main">
+    <nav class="panel rail" id="rail" aria-label="Drawings"></nav>
+    <section class="stagewrap">
+      <div class="tools" id="tools" hidden>
+        <span class="title" id="dname"></span>
+        <div class="spacer"></div>
+        <button class="btn small" id="fit">Fit</button>
+        <button class="btn small" id="zin" aria-label="Zoom in">+</button>
+        <button class="btn small" id="zout" aria-label="Zoom out">−</button>
+        <button class="btn small" id="clean" title="Grey out the original highlighter so only the layers you switch on show in colour">Clean view</button>
+        <button class="btn small" id="labels">Labels</button>
+        <button class="btn small" id="move" hidden aria-pressed="false" title="When on, drag labels and lights to reposition them. Turn off to avoid moving them by accident.">Move labels: locked</button>
+        <button class="btn small" id="edit" hidden>Edit marks</button>
+      </div>
+      <div class="stage" id="stage">
+        <div class="world" id="world"><img id="img" alt=""><svg id="svg"></svg></div>
+        <div class="zoomnote" id="zoomnote" hidden></div>
+        <div class="empty" id="empty">
+          <div class="box">
+            <h2>Upload a marked-up drawing</h2>
+            <p>Use a photo, scan or PDF of a plan where the lights are marked with coloured highlighter and a legend says what each colour means. Lightmark finds the marks and puts each colour on its own layer. Name the layers from your legend, then filter by wattage, bulb and cap.</p>
+            <p class="note" id="emptynote">Loading drawings…</p>
+            <button class="btn" id="example" hidden>Add the Quidditch Stadium example</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <aside class="panel desk" id="desk"></aside>
+  </div>
+</div>
+<div class="progress" id="progress" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+// Finds highlighter-style colour marks on a drawing. Returns blobs (normalised 0..1 coords) grouped by hue.
+function detectMarks(canvas) {
+  const W = canvas.width, H = canvas.height;
+  const px = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+  const N = W * H;
+  const hue = new Float32Array(N), ink = new Uint8Array(N);
+  for (let i = 0; i < N; i++) {
+    const r = px[i * 4] / 255, g = px[i * 4 + 1] / 255, b = px[i * 4 + 2] / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    const s = mx ? d / mx : 0;
+    if (s < 0.4 || mx < 0.28 || d < 0.13) continue;
+    let h;
+    if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+    h *= 60; if (h < 0) h += 360;
+    hue[i] = h; ink[i] = 1;
+  }
+  const hd = (a, b) => { const x = Math.abs(a - b) % 360; return x > 180 ? 360 - x : x; };
+  // connected components, neighbours must share hue
+  const lab = new Int32Array(N).fill(-1), comps = [], stack = [];
+  for (let i = 0; i < N; i++) {
+    if (!ink[i] || lab[i] >= 0) continue;
+    const id = comps.length; lab[i] = id; stack.push(i);
+    let n = 0, sx = 0, sy = 0, hx = 0, hy = 0, rr = 0, gg = 0, bb = 0, x0 = W, y0 = H, x1 = 0, y1 = 0;
+    while (stack.length) {
+      const p = stack.pop(), x = p % W, y = (p / W) | 0;
+      n++; sx += x; sy += y;
+      const a = hue[p] * Math.PI / 180; hx += Math.cos(a); hy += Math.sin(a);
+      rr += px[p * 4]; gg += px[p * 4 + 1]; bb += px[p * 4 + 2];
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      const nb = [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, y > 0 ? p - W : -1, y < H - 1 ? p + W : -1];
+      for (const q of nb) if (q >= 0 && ink[q] && lab[q] < 0 && hd(hue[q], hue[p]) < 22) { lab[q] = id; stack.push(q); }
+    }
+    let h = Math.atan2(hy, hx) * 180 / Math.PI; if (h < 0) h += 360;
+    comps.push({ n, cx: sx / n, cy: sy / n, h, r: rr / n, g: gg / n, b: bb / n, x0, y0, x1, y1 });
+  }
+  const area = N, minA = area * 0.000012, maxA = area * 0.006;
+  const maxSide = Math.max(W, H) * 0.06;
+  let blobs = comps.filter(c => c.n >= 4 && c.n <= maxA && Math.max(c.x1 - c.x0, c.y1 - c.y0) < maxSide);
+  // merge fragments of the same mark (highlighter split by the black symbol drawn over it)
+  const gap = Math.max(W, H) * 0.006;
+  let merged = true;
+  while (merged) {
+    merged = false;
+    outer: for (let i = 0; i < blobs.length; i++) for (let j = i + 1; j < blobs.length; j++) {
+      const A = blobs[i], B = blobs[j];
+      if (hd(A.h, B.h) > 22) continue;
+      if (A.x0 - gap > B.x1 || B.x0 - gap > A.x1 || A.y0 - gap > B.y1 || B.y0 - gap > A.y1) continue;
+      if (Math.max(A.x1, B.x1) - Math.min(A.x0, B.x0) > maxSide || Math.max(A.y1, B.y1) - Math.min(A.y0, B.y0) > maxSide) continue;
+      const n = A.n + B.n, f = (k) => (A[k] * A.n + B[k] * B.n) / n;
+      const ha = A.h * Math.PI / 180, hb = B.h * Math.PI / 180;
+      let h = Math.atan2(Math.sin(ha) * A.n + Math.sin(hb) * B.n, Math.cos(ha) * A.n + Math.cos(hb) * B.n) * 180 / Math.PI; if (h < 0) h += 360;
+      blobs[i] = { n, cx: f('cx'), cy: f('cy'), h, r: f('r'), g: f('g'), b: f('b'),
+        x0: Math.min(A.x0, B.x0), y0: Math.min(A.y0, B.y0), x1: Math.max(A.x1, B.x1), y1: Math.max(A.y1, B.y1) };
+      blobs.splice(j, 1); merged = true; break outer;
+    }
+  }
+  blobs = blobs.filter(c => {
+    const bw = c.x1 - c.x0 + 1, bh = c.y1 - c.y0 + 1, fill = c.n / (bw * bh);
+    return c.n >= minA && c.n <= maxA && fill > 0.2 && Math.max(bw, bh) < Math.max(W, H) * 0.08 && Math.max(bw / bh, bh / bw) < 5;
+  });
+  // group blobs by hue
+  blobs.sort((a, b) => a.h - b.h);
+  const groups = [];
+  for (const c of blobs) {
+    let g = groups.find(g => hd(g.h, c.h) < 18);
+    if (!g) { g = { h: c.h, items: [] }; groups.push(g); }
+    g.items.push(c);
+    const k = g.items.length; g.h = g.h + (((c.h - g.h + 540) % 360) - 180) / k;
+  }
+  const hex = (r, g, b) => '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+  return groups.map(g => {
+    const k = g.items.length, avg = (key) => g.items.reduce((s, c) => s + c[key], 0) / k;
+    return {
+      hue: Math.round(g.h), color: hex(avg('r'), avg('g'), avg('b')),
+      marks: g.items.map(c => ({ x: c.cx / W, y: c.cy / H, w: (c.x1 - c.x0 + 1) / W, h: (c.y1 - c.y0 + 1) / H })),
+    };
+  }).sort((a, b) => b.marks.length - a.marks.length);
+}
+
+
+const $ = (id) => document.getElementById(id);
+const S = {
+  canWrite: false, canAdmin: false, img: {}, imgLoading: {},
+  drawings: [], local: [], cur: null, hidden: {}, clean: false, labels: true, edit: false,
+  activeLayer: null, sel: null, move: false, editLayer: null, view: { s: 1, x: 0, y: 0 }, confirmDel: false,
+};
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function toast(msg, ms = 3200) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), ms); }
+function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null'); localStorage.setItem(k, JSON.stringify(v)); } catch { return null; } }
+S.hidden = store('lm.hidden') || {}; S.clean = !!store('lm.clean'); S.labels = store('lm.labels') ?? true;
+
+function allDrawings() { return [...S.local, ...S.drawings]; }
+function current() { return allDrawings().find((d) => d.id === S.cur) || null; }
+function imgSrc(d) {
+  if (d.localUrl) return d.localUrl;
+  if (S.img[d.id]) return S.img[d.id];
+  if (!S.imgLoading[d.id] && S.canWrite) {
+    S.imgLoading[d.id] = API.image(d.id).then((u) => { if (u) { S.img[d.id] = u; renderStage(); } }).catch(() => toast('Couldn’t load that drawing’s image. Reload to try again.')).finally(() => { S.imgLoading[d.id] = null; });
+  }
+  return d.thumb || '';
+}
+function thumbSrc(d) { return d.localUrl || d.thumb || S.img[d.id] || ''; }
+function specLine(l) { return [l.watt ? l.watt + 'W' : '', l.volt ? l.volt + 'V' : '', l.bulb, l.cap, l.finish].filter(Boolean).join(' · '); }
+function hiddenSet(d) { return new Set(S.hidden[d.id] || []); }
+function setHidden(d, set) { S.hidden[d.id] = [...set]; store('lm.hidden', S.hidden); render(); }
+
+/* ---------- rendering ---------- */
+function renderRail() {
+  const list = allDrawings();
+  $('rail').innerHTML = `<div class="label">Drawings · ${list.length}</div>` + (list.length ? list.map((d) => `
+    <button class="dwg ${d.id === S.cur ? 'sel' : ''}" data-id="${esc(d.id)}">
+      <img src="${esc(thumbSrc(d))}" alt="" loading="lazy">
+      <span style="min-width:0"><div class="t">${esc(d.name)}</div><div class="m">${d.marks.length} lights · ${d.layers.length} layers${d.localUrl ? ' · this device only' : ''}</div></span>
+    </button>`).join('') : `<p class="note">Nothing uploaded yet.</p>`);
+}
+function renderStage() {
+  const d = current();
+  $('empty').hidden = !!d; $('tools').hidden = !d; $('world').hidden = !d; $('zoomnote').hidden = !d;
+  if (!d) return;
+  $('dname').textContent = d.name;
+  const img = $('img');
+  const src = imgSrc(d);
+  if (img.dataset.did !== d.id) { img.dataset.did = d.id; S.needFit = true; }
+  if (img.dataset.src !== src) { img.dataset.src = src; img.src = src; }
+  img.width = d.w; img.height = d.h;
+  $('world').classList.toggle('clean', S.clean);
+  $('clean').classList.toggle('on', S.clean); $('labels').classList.toggle('on', S.labels); $('edit').classList.toggle('on', S.edit);
+  $('edit').hidden = !canEditDrawing(d); $('move').hidden = !canEditDrawing(d);
+  $('move').classList.toggle('on', S.move); $('move').textContent = S.move ? 'Move labels: on' : 'Move labels: locked'; $('move').setAttribute('aria-pressed', S.move);
+  $('stage').classList.toggle('moving', S.move);
+  $('stage').classList.toggle('editing', S.edit);
+  const svg = $('svg'); svg.setAttribute('viewBox', `0 0 ${d.w} ${d.h}`); svg.setAttribute('width', d.w); svg.setAttribute('height', d.h);
+  const hid = hiddenSet(d), R = Math.max(d.w, d.h) * 0.011, byId = Object.fromEntries(d.layers.map((l) => [l.id, l]));
+  svg.innerHTML = d.marks.filter((m) => byId[m.l] && !hid.has(m.l)).map((m) => {
+    const l = byId[m.l], cx = m.x * d.w, cy = m.y * d.h;
+    return `<g class="mk ${S.sel === m.id ? 'sel' : ''}" data-id="${m.id}">
+      <circle class="f" cx="${cx}" cy="${cy}" r="${R}" fill="${esc(l.color)}"/>
+      <circle class="r" cx="${cx}" cy="${cy}" r="${R}" stroke="${esc(l.color)}" stroke-width="${R * 0.28}"/>
+      ${S.sel === m.id ? `<circle class="s" cx="${cx}" cy="${cy}" r="${R * 1.6}" stroke-width="${R * 0.12}"/>` : ''}
+      ${S.labels && m.label ? `<text class="lbl" data-id="${m.id}" x="${cx + (m.lx ?? R * 1.3 / d.w) * d.w}" y="${cy + (m.ly ?? -R * 0.9 / d.h) * d.h}" font-size="${R * 1.25}" stroke-width="${R * 0.35}" fill="${esc(l.color)}">${esc(m.label)}</text>` : ''}
+    </g>`;
+  }).join('');
+  applyView();
+}
+function filterValues(d) {
+  const attrs = [['watt', 'Wattage', (v) => v + 'W'], ['volt', 'Voltage', (v) => v + 'V'], ['bulb', 'Bulb', String], ['cap', 'Cap', String], ['finish', 'Finish', String]];
+  return attrs.map(([k, name, fmt]) => {
+    const vals = [...new Set(d.layers.map((l) => l[k]).filter((v) => v !== null && v !== undefined && v !== ''))];
+    vals.sort((a, b) => (typeof a === 'number' && typeof b === 'number' ? b - a : String(a).localeCompare(String(b))));
+    return { k, name, vals: vals.map((v) => ({ v, text: fmt(v) })) };
+  }).filter((a) => a.vals.length > 1 || (a.vals.length === 1 && d.layers.some((l) => l[a.k] == null || l[a.k] === '')));
+}
+function renderDesk() {
+  const d = current(), desk = $('desk');
+  if (!d) { desk.innerHTML = `<div class="sect"><div class="label">Layers</div><p class="note">Each light colour on the drawing becomes a layer you can switch on and off. Filters group layers by wattage, voltage, bulb and cap.</p></div>`; return; }
+  const hid = hiddenSet(d), counts = {}, editable = canEditDrawing(d);
+  d.marks.forEach((m) => (counts[m.l] = (counts[m.l] || 0) + 1));
+  const visibleLights = d.marks.filter((m) => !hid.has(m.l)).length;
+  const fv = filterValues(d);
+  const sm = S.sel && d.marks.find((m) => m.id === S.sel);
+  desk.innerHTML = `
+  <div class="sect">
+    <div class="sect-h"><span class="label">Layers</span><button class="linkbtn" data-act="all">Show all</button><button class="linkbtn" data-act="none">Hide all</button></div>
+    <div class="note"><b style="font-family:var(--font-data)">${visibleLights}</b> of ${d.marks.length} lights showing</div>
+    ${d.layers.map((l) => `
+      <div class="layer ${hid.has(l.id) ? 'off' : ''} ${S.edit && S.activeLayer === l.id ? 'active' : ''}" data-layer="${l.id}">
+        <input type="checkbox" class="switch" data-toggle="${l.id}" ${hid.has(l.id) ? '' : 'checked'} aria-label="Show ${esc(l.name)}">
+        <span class="sw" style="background:${esc(l.color)}"></span>
+        <span style="min-width:0"><div class="nm">${esc(l.name)}</div><div class="sp">${esc(specLine(l)) || '&nbsp;'}</div></span>
+        <span class="ct">${counts[l.id] || 0}</span>
+        ${S.edit ? (S.editLayer === l.id ? layerForm(l) : `<div class="row" style="grid-column:1/-1;display:flex;gap:6px"><button class="btn small" data-act="active" data-l="${l.id}">${S.activeLayer === l.id ? 'Adding to this layer' : 'Add marks here'}</button><button class="btn small" data-act="editl" data-l="${l.id}">Edit details</button></div>`) : ''}
+      </div>`).join('')}
+    ${S.edit ? `<button class="btn small" data-act="addl">Add layer</button>` : ''}
+  </div>
+  ${fv.length ? `<div class="sect"><div class="label">Filter by</div>${fv.map((a) => `
+    <div class="fgroup"><span>${a.name}</span><div class="chips">${a.vals.map((o) => {
+      const ls = d.layers.filter((l) => l[a.k] === o.v), on = ls.filter((l) => !hid.has(l.id)).length;
+      return `<button class="chip ${on === ls.length ? 'on' : on ? 'part' : ''}" data-fk="${a.k}" data-fv="${esc(JSON.stringify(o.v))}" title="Click to switch these layers on or off. Double-click to show only these.">${esc(o.text)}</button>`;
+    }).join('')}</div></div>`).join('')}<p class="note">Click a value to switch its lights on or off. Double-click to show only that value.</p></div>` : ''}
+  ${S.edit ? `<div class="sect"><div class="label">Editing</div>
+    ${sm ? `<div class="markedit"><div class="row"><b>Selected light</b></div>
+      <div class="row"><select id="selLayer">${d.layers.map((l) => `<option value="${l.id}" ${l.id === sm.l ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>
+      <input id="selLabel" placeholder="Label, e.g. 9.3" value="${esc(sm.label || '')}" size="8"></div>
+      <div class="row"><button class="btn small danger" data-act="delmark">Remove light</button><button class="btn small" data-act="desel">Done</button></div></div>`
+    : `<p class="note">Click the drawing to add a light to the highlighted layer. Click a light to change its layer or label.</p>`}
+    ${S.canWrite || d.localUrl ? `<button class="btn small" data-act="redetect">Re-detect lights</button>` : ''}
+  </div>` : ''}
+  <div class="sect"><div class="label">Drawing</div>
+    <div class="note">${d.ai ? 'Layers were set up from the drawing’s legend.' : 'Lights are grouped by colour. Turn on Edit marks to name each layer from your legend, and delete any layer that picked up something that isn’t a light.'} ${d.localUrl ? 'This drawing hasn’t been saved and will be gone when you close the page.' : ''}</div>
+    ${editable && !d.localUrl && S.canAdmin ? (S.confirmDel ? `<div class="confirm">Delete this drawing for everyone? <button class="btn small danger" data-act="delyes">Delete</button><button class="btn small" data-act="delno">Keep</button></div>` : `<button class="btn small danger" data-act="del">Delete drawing</button>`) : ''}
+  </div>`;
+}
+function layerForm(l) {
+  const others = current().layers.filter((o) => o.id !== l.id);
+  return `<div class="ledit" data-form="${l.id}">
+    <label class="wide">Name<input data-f="name" value="${esc(l.name)}"></label>
+    <label>Watts<input data-f="watt" type="number" min="0" value="${l.watt ?? ''}"></label>
+    <label>Volts<input data-f="volt" type="number" min="0" value="${l.volt ?? ''}"></label>
+    <label>Bulb<input data-f="bulb" value="${esc(l.bulb || '')}" placeholder="GLS, Golfball…"></label>
+    <label>Cap<input data-f="cap" value="${esc(l.cap || '')}" placeholder="ES, BC…"></label>
+    <label>Finish<input data-f="finish" value="${esc(l.finish || '')}" placeholder="Pearl, Clear…"></label>
+    <label>Colour<input data-f="color" type="color" value="${esc(l.color)}"></label>
+    ${others.length ? `<label class="wide">Merge into another layer<select data-merge="${l.id}"><option value="">Choose a layer…</option>${others.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select></label>` : ''}
+    <div class="row"><button class="btn small" data-act="donel">Done</button><button class="btn small danger" data-act="dell" data-l="${l.id}">Delete layer and its lights</button></div>
+  </div>`;
+}
+function render() { renderRail(); renderStage(); renderDesk(); }
+
+/* ---------- pan & zoom ---------- */
+function applyView() {
+  const d = current(); if (!d) return;
+  if (S.needFit && $('stage').clientWidth) { S.needFit = false; fit(); return; }
+  const v = S.view; $('world').style.transform = `translate(${v.x}px,${v.y}px) scale(${v.s})`;
+  $('zoomnote').textContent = Math.round(v.s * 100) + '%';
+}
+function fit() {
+  const d = current(); if (!d) return;
+  const st = $('stage'), W = st.clientWidth, H = st.clientHeight, s = Math.min(W / d.w, H / d.h) * 0.96;
+  S.view = { s, x: (W - d.w * s) / 2, y: (H - d.h * s) / 2 }; applyView();
+}
+function zoomAt(f, px, py) {
+  const v = S.view, s = Math.min(Math.max(v.s * f, 0.02), 12);
+  S.view = { s, x: px - (px - v.x) * (s / v.s), y: py - (py - v.y) * (s / v.s) }; applyView();
+}
+(() => {
+  const st = $('stage'), pts = new Map(); let start = null, pinch = null;
+  st.addEventListener('wheel', (e) => { e.preventDefault(); const r = st.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+  st.addEventListener('pointerdown', (e) => {
+    if (!current()) return;
+    st.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) {
+      start = { x: e.clientX, y: e.clientY, vx: S.view.x, vy: S.view.y, moved: false, target: e.target };
+      const d = current(), t = e.target, g = t.closest && t.closest('.mk');
+      if (S.move && g && canEditDrawing(d)) {
+        const m = d.marks.find((x) => x.id === g.dataset.id);
+        if (m) { const R = Math.max(d.w, d.h) * 0.011; start.drag = { m, kind: t.classList.contains('lbl') ? 'label' : 'mark', x: m.x, y: m.y, lx: m.lx ?? R * 1.3 / d.w, ly: m.ly ?? -R * 0.9 / d.h }; }
+      }
+    }
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) }; start = null; }
+  });
+  st.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size === 2) { const [a, b] = [...pts.values()], dd = Math.hypot(a.x - b.x, a.y - b.y), r = st.getBoundingClientRect(); zoomAt(dd / pinch.d, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top); pinch.d = dd; return; }
+    if (start) { const dx = e.clientX - start.x, dy = e.clientY - start.y; if (Math.abs(dx) + Math.abs(dy) > 5) start.moved = true; if (start.moved) {
+      if (start.drag) {
+        const d = current(), g = start.drag, ux = dx / S.view.s / d.w, uy = dy / S.view.s / d.h;
+        if (g.kind === 'label') { g.m.lx = +(g.lx + ux).toFixed(4); g.m.ly = +(g.ly + uy).toFixed(4); }
+        else { g.m.x = +Math.min(1, Math.max(0, g.x + ux)).toFixed(4); g.m.y = +Math.min(1, Math.max(0, g.y + uy)).toFixed(4); }
+        renderStage(); return;
+      }
+      S.view.x = start.vx + dx; S.view.y = start.vy + dy; applyView(); } }
+  });
+  const end = (e) => {
+    if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId);
+    if (pts.size < 2) pinch = null;
+    if (start && start.drag && start.moved) changed(current());
+    else if (start && !start.moved && e.type === 'pointerup') stageClick(e, start.target);
+    if (!pts.size) start = null;
+  };
+  st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
+  new ResizeObserver(() => { if (current()) applyView(); }).observe(st);
+})();
+function stageClick(e, target) {
+  const d = current(); if (!d) return;
+  const g = target.closest && target.closest('.mk');
+  if (!S.edit) { if (g) { const m = d.marks.find((x) => x.id === g.dataset.id), l = m && d.layers.find((x) => x.id === m.l); if (l) toast(`${m.label ? m.label + ' · ' : ''}${l.name}${specLine(l) ? ' · ' + specLine(l) : ''}`); } return; }
+  if (g) { S.sel = g.dataset.id; render(); return; }
+  if (!S.activeLayer || !d.layers.some((l) => l.id === S.activeLayer)) { toast('Pick a layer first: choose "Add marks here" on a layer.'); return; }
+  const r = $('stage').getBoundingClientRect(), v = S.view;
+  const x = (e.clientX - r.left - v.x) / v.s / d.w, y = (e.clientY - r.top - v.y) / v.s / d.h;
+  if (x < 0 || y < 0 || x > 1 || y > 1) return;
+  const m = { id: uid(), x: +x.toFixed(4), y: +y.toFixed(4), l: S.activeLayer, label: '' };
+  d.marks.push(m); S.sel = m.id; changed(d); render();
+}
+
+/* ---------- saving ---------- */
+function canEditDrawing(d) { return !!d && (d.localUrl ? true : S.canWrite); }
+const saving = {};
+function changed(d) {
+  if (d.localUrl) return;
+  const st = saving[d.id] || (saving[d.id] = { busy: false, dirty: false, t: 0 });
+  st.dirty = true; clearTimeout(st.t); st.t = setTimeout(() => flush(d.id), 700);
+}
+async function flush(id) {
+  const st = saving[id]; if (!st || st.busy || !st.dirty) return;
+  const d = S.drawings.find((x) => x.id === id); if (!d) return;
+  st.busy = true; st.dirty = false;
+  try { await API.save(d); }
+  catch (e) { toast('Couldn’t save that change. Check your connection and try again.'); st.dirty = true; }
+  st.busy = false; if (st.dirty) flush(id);
+}
+
+
+/* ---------- desk events ---------- */
+$('desk').addEventListener('change', (e) => {
+  const d = current(); if (!d) return;
+  const t = e.target;
+  if (t.dataset.toggle) { const h = hiddenSet(d); t.checked ? h.delete(t.dataset.toggle) : h.add(t.dataset.toggle); setHidden(d, h); return; }
+  if (t.dataset.merge && t.value) {
+    const from = t.dataset.merge, to = t.value;
+    d.marks.forEach((m) => { if (m.l === from) m.l = to; });
+    d.layers = d.layers.filter((l) => l.id !== from); S.editLayer = null; if (S.activeLayer === from) S.activeLayer = to;
+    changed(d); render(); return;
+  }
+  if (t.dataset.f) {
+    const l = d.layers.find((x) => x.id === t.closest('[data-form]').dataset.form); if (!l) return;
+    const k = t.dataset.f; let v = t.value.trim();
+    if (k === 'watt' || k === 'volt') v = v === '' ? null : Number(v);
+    l[k] = v === '' ? null : v; if (k === 'name' && !l.name) l.name = 'Untitled layer';
+    changed(d); renderStage(); renderRail(); return;
+  }
+  if (t.id === 'selLayer' || t.id === 'selLabel') {
+    const m = d.marks.find((x) => x.id === S.sel); if (!m) return;
+    if (t.id === 'selLayer') m.l = t.value; else m.label = t.value.trim().slice(0, 24);
+    changed(d); render();
+  }
+});
+$('desk').addEventListener('click', (e) => {
+  const d = current(); if (!d) return;
+  const chip = e.target.closest('.chip');
+  if (chip) {
+    const k = chip.dataset.fk, v = JSON.parse(chip.dataset.fv), ls = d.layers.filter((l) => l[k] === v), h = hiddenSet(d);
+    if (e.detail >= 2) { d.layers.forEach((l) => (ls.includes(l) ? h.delete(l.id) : h.add(l.id))); }
+    else { const allOn = ls.every((l) => !h.has(l.id)); ls.forEach((l) => (allOn ? h.add(l.id) : h.delete(l.id))); }
+    setHidden(d, h); return;
+  }
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'all') setHidden(d, new Set());
+  if (act === 'none') setHidden(d, new Set(d.layers.map((l) => l.id)));
+  if (act === 'active') { S.activeLayer = b.dataset.l; render(); }
+  if (act === 'editl') { S.editLayer = b.dataset.l; render(); }
+  if (act === 'donel') { S.editLayer = null; render(); }
+  if (act === 'addl') { const l = { id: uid(), name: 'New layer', color: '#7a5cff', watt: null, volt: null, bulb: null, cap: null, finish: null }; d.layers.push(l); S.editLayer = l.id; S.activeLayer = l.id; changed(d); render(); }
+  if (act === 'dell') { const id = b.dataset.l; d.layers = d.layers.filter((l) => l.id !== id); d.marks = d.marks.filter((m) => m.l !== id); S.editLayer = null; changed(d); render(); }
+  if (act === 'delmark') { d.marks = d.marks.filter((m) => m.id !== S.sel); S.sel = null; changed(d); render(); }
+  if (act === 'desel') { S.sel = null; render(); }
+  if (act === 'redetect') redetect(d);
+  if (act === 'del') { S.confirmDel = true; renderDesk(); }
+  if (act === 'delno') { S.confirmDel = false; renderDesk(); }
+  if (act === 'delyes') deleteDrawing(d);
+});
+$('rail').addEventListener('click', (e) => { const b = e.target.closest('.dwg'); if (!b) return; select(b.dataset.id); });
+function select(id) { S.cur = id; S.sel = null; S.editLayer = null; S.confirmDel = false; S.activeLayer = null; S.needFit = true; store('lm.cur', id); render(); }
+$('fit').onclick = fit;
+$('zin').onclick = () => { const st = $('stage'); zoomAt(1.3, st.clientWidth / 2, st.clientHeight / 2); };
+$('zout').onclick = () => { const st = $('stage'); zoomAt(1 / 1.3, st.clientWidth / 2, st.clientHeight / 2); };
+$('clean').onclick = () => { S.clean = !S.clean; store('lm.clean', S.clean); renderStage(); };
+$('labels').onclick = () => { S.labels = !S.labels; store('lm.labels', S.labels); renderStage(); };
+$('move').onclick = () => { S.move = !S.move; if (S.move && !S.labels) { S.labels = true; store('lm.labels', true); } renderStage(); };
+$('edit').onclick = () => { S.edit = !S.edit; S.sel = null; S.editLayer = null; const d = current(); if (S.edit && d && !S.activeLayer) S.activeLayer = d.layers[0]?.id || null; render(); };
+$('upload').onclick = () => $('file').click();
+$('file').onchange = async (e) => { const files = [...e.target.files]; e.target.value = ''; for (const f of files) await ingest(f); };
+
+async function deleteDrawing(d) {
+  try {
+    await API.remove(d.id);
+    S.drawings = S.drawings.filter((x) => x.id !== d.id); delete S.img[d.id];
+    S.cur = null; S.confirmDel = false; toast('Drawing deleted'); render();
+  } catch { toast('Couldn’t delete the drawing. Try again.'); }
+}
+
+/* ---------- upload pipeline ---------- */
+function progress(steps) {
+  const p = $('progress');
+  if (!steps) { p.hidden = true; return; }
+  p.hidden = false;
+  p.innerHTML = `<div class="label">${esc(steps.title)}</div><ol>${steps.items.map((s) => `<li class="${s.st || ''}">${esc(s.t)}</li>`).join('')}</ol>`;
+}
+function loadImage(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+function toCanvas(src, maxSide) {
+  const w = src.naturalWidth || src.width, h = src.naturalHeight || src.height, s = Math.min(1, maxSide / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.round(w * s); c.height = Math.round(h * s);
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(src, 0, 0, c.width, c.height); return c;
+}
+const toBlob = (c, q = 0.88) => new Promise((r) => c.toBlob(r, 'image/jpeg', q));
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+async function pdfPages(file) {
+  if (!window.pdfjsLib) {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js');
+  }
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const out = [];
+  for (let n = 1; n <= Math.min(pdf.numPages, 12); n++) {
+    const page = await pdf.getPage(n), v1 = page.getViewport({ scale: 1 }), scale = Math.min(4, 3000 / Math.max(v1.width, v1.height));
+    const vp = page.getViewport({ scale }), c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise; out.push(c);
+  }
+  return { pages: out, total: pdf.numPages };
+}
+async function ingest(file) {
+  const base = file.name.replace(/\.[^.]+$/, '') || 'Drawing';
+  const steps = { title: base, items: [{ t: 'Reading file' }, { t: 'Finding coloured marks' }, { t: 'Saving for everyone with the link' }] };
+  const step = (i, st = 'now') => { steps.items.forEach((s, j) => (s.st = j < i ? 'done' : j === i ? st : '')); progress(steps); };
+  step(0);
+  let canvases = [];
+  try {
+    if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+      const r = await pdfPages(file); canvases = r.pages;
+      if (r.total > 12) toast(`Only the first 12 of ${r.total} pages were added.`);
+    } else {
+      const url = URL.createObjectURL(file); const im = await loadImage(url); canvases = [toCanvas(im, 3000)]; URL.revokeObjectURL(url);
+    }
+  } catch { steps.items[0].t = 'This file couldn’t be opened. Use a JPEG, PNG or PDF.'; step(0, 'err'); setTimeout(() => progress(null), 5000); return; }
+  for (let p = 0; p < canvases.length; p++) {
+    const full = canvases[p], name = canvases.length > 1 ? `${base} · page ${p + 1}` : base;
+    steps.title = name; step(1);
+    const result = await analyse(full);
+    step(2);
+    const d = { name, w: full.width, h: full.height, ...result };
+    try { await saveNew(d, full); }
+    catch (e) { toast('Couldn’t save the drawing. It’s open on this device only. Check your connection and upload it again.', 7000); addLocal(d, full); }
+  }
+  steps.items.forEach((s) => (s.st = 'done')); progress(steps); setTimeout(() => progress(null), 1600);
+}
+function addLocal(d, canvas) {
+  canvas.toBlob((b) => { d.id = 'local-' + uid(); d.localUrl = URL.createObjectURL(b); S.local.unshift(d); select(d.id); }, 'image/jpeg', 0.9);
+}
+
+/* detection + legend reading */
+async function saveNew(d, full) {
+  const img = toCanvas(full, 2400), image = img.toDataURL('image/jpeg', 0.85), thumb = toCanvas(full, 180).toDataURL('image/jpeg', 0.7);
+  const row = await API.create({ ...d, thumb }, image);
+  S.img[row.id] = image; S.drawings.unshift(row); select(row.id);
+}
+async function analyse(full) {
+  const small = toCanvas(full, 1400);
+  const groups = detectMarks(small);
+  const cands = []; groups.forEach((g, gi) => g.marks.forEach((m) => cands.push({ id: cands.length + 1, g: gi, ...m, color: g.color })));
+  // fallback: one layer per colour group
+  const layers = groups.map((g, i) => ({ id: uid(), name: 'Colour ' + (i + 1), color: g.color, watt: null, volt: null, bulb: null, cap: null, finish: null }));
+  return { ai: false, layers, marks: cands.map((c) => ({ id: uid(), x: +c.x.toFixed(4), y: +c.y.toFixed(4), l: layers[c.g].id, label: '' })) };
+}
+async function redetect(d) {
+  progress({ title: 'Re-detecting ' + d.name, items: [{ t: 'Finding coloured marks', st: 'now' }] });
+  try {
+    const im = await loadImage(imgSrc(d)); const full = toCanvas(im, 3000);
+    const r = await analyse(full);
+    Object.assign(d, r); S.hidden[d.id] = []; store('lm.hidden', S.hidden); S.sel = null; S.activeLayer = d.layers[0]?.id || null;
+    changed(d); render(); toast(`Found ${d.marks.length} lights on ${d.layers.length} layers`);
+  } catch { toast('Couldn’t re-read this drawing.'); }
+  progress(null);
+}
+
+/* ---------- database (Supabase) ---------- */
+// Fill these in from Supabase > Project Settings > API. The anon key is designed to be public;
+// the password is checked by the database itself (see supabase-setup.sql).
+const CONFIG = { url: '__SUPABASE_URL__', key: '__SUPABASE_ANON_KEY__' };
+const API = {
+  pass: store('lm.pass') || '',
+  configured() { return /^https:\/\//.test(CONFIG.url) && CONFIG.key.length > 20; },
+  async req(path, opts = {}, pass = this.pass) {
+    const r = await fetch(CONFIG.url.replace(/\/$/, '') + '/rest/v1/' + path, {
+      ...opts,
+      headers: { apikey: CONFIG.key, Authorization: 'Bearer ' + CONFIG.key, 'x-lightmark-pass': pass, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    });
+    if (!r.ok) { const e = new Error(await r.text().catch(() => '')); e.status = r.status; throw e; }
+    const t = await r.text(); return t ? JSON.parse(t) : null;
+  },
+  check(p) { return this.req('rpc/lm_pass_ok', { method: 'POST', body: '{}' }, p).then((x) => x === true); },
+  list() { return this.req('drawings?select=id,name,w,h,created,ai,thumb,layers,marks&order=created.desc'); },
+  image(id) { return this.req('drawing_images?select=data&id=eq.' + encodeURIComponent(id)).then((r) => (r && r[0] ? r[0].data : null)); },
+  save(d) { return this.req('drawings?id=eq.' + encodeURIComponent(d.id), { method: 'PATCH', body: JSON.stringify({ name: d.name, ai: !!d.ai, layers: d.layers, marks: d.marks }), headers: { Prefer: 'return=minimal' } }); },
+  async create(d, image) {
+    const body = { name: d.name, w: d.w, h: d.h, ai: !!d.ai, thumb: d.thumb, layers: d.layers, marks: d.marks };
+    const [row] = await this.req('drawings', { method: 'POST', body: JSON.stringify(body), headers: { Prefer: 'return=representation' } });
+    try { await this.req('drawing_images', { method: 'POST', body: JSON.stringify({ id: row.id, data: image }), headers: { Prefer: 'return=minimal' } }); }
+    catch (e) { await this.remove(row.id).catch(() => {}); throw e; }
+    return row;
+  },
+  remove(id) { return this.req('drawings?id=eq.' + encodeURIComponent(id), { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); },
+};
+
+async function refresh() {
+  if (!S.canWrite) return;
+  let rows;
+  try { rows = await API.list(); } catch { $('emptynote').textContent = 'Drawings couldn’t be loaded. Check your connection and reload the page.'; return; }
+  S.drawings = rows.map((r) => {
+    const st = saving[r.id], mine = st && (st.busy || st.dirty) && S.drawings.find((x) => x.id === r.id);
+    return mine || { layers: [], marks: [], ...r };
+  });
+  const last = store('lm.cur');
+  if (!current()) { S.cur = (S.drawings.find((x) => x.id === last) || S.drawings[0] || S.local[0] || {}).id || null; S.needFit = true; }
+  $('emptynote').textContent = 'Drawings you upload here are shared with everyone who has the link and password.';
+  $('example').hidden = S.drawings.length > 0;
+  if (!S.edit || !S.drawings.some((x) => x.id === S.cur)) render(); else { renderRail(); }
+}
+function start() {
+  S.canWrite = true; S.canAdmin = true;
+  $('gate').hidden = true; $('upload').hidden = false;
+  refresh(); setInterval(() => { if (!document.hidden && !S.edit && !S.move) refresh(); }, 15000);
+}
+$('example').onclick = async () => {
+  const b = $('example'); b.disabled = true; b.textContent = 'Adding the example…';
+  try {
+    const [im, data] = await Promise.all([loadImage('example.jpg'), fetch('example.json').then((r) => r.json())]);
+    const full = toCanvas(im, 3000);
+    await saveNew({ ...data, w: full.width, h: full.height }, full);
+  } catch { toast('Couldn’t add the example. Check example.jpg and example.json are next to index.html.'); }
+  b.disabled = false; b.textContent = 'Add the Quidditch Stadium example';
+};
+
+/* ---------- password gate ---------- */
+async function tryPass(p) {
+  try { return await API.check(p); } catch (e) { return e && e.status ? false : null; }
+}
+$('gateform').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const p = $('pw').value.trim(); if (!p) return;
+  $('pwerr').textContent = 'Checking…';
+  const ok = await tryPass(p);
+  if (ok) { API.pass = p; store('lm.pass', p); $('pwerr').textContent = ''; start(); }
+  else if (ok === null) $('pwerr').textContent = 'Couldn’t reach the database. Check your connection and try again.';
+  else { $('pwerr').textContent = 'That password isn’t right. Check the spelling and try again.'; $('pw').select(); }
+});
+(async () => {
+  render();
+  $('gate').hidden = false;
+  if (!API.configured()) { $('gateform').innerHTML = '<h1>Lightmark</h1><p class="note">This site isn’t connected to its database yet. Add the Supabase URL and anon key to CONFIG in index.html.</p>'; return; }
+  if (API.pass && (await tryPass(API.pass))) start();
+  else setTimeout(() => $('pw').focus(), 50);
+})();
+</script>
+
+</body>
+</html>
