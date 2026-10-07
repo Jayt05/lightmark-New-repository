@@ -96,7 +96,7 @@ header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; pad
 .tools .title { font-family: var(--font-display); font-size: 22px; font-weight: 600; margin-right: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .stage { position: relative; overflow: hidden; background: var(--stage); border-radius: 8px; border: 1px solid var(--line); touch-action: none; min-height: 320px; cursor: grab; }
 .stage.editing { cursor: crosshair; }
-.stage.moving .mk text, .stage.moving .mk circle { cursor: move; }
+.stage.moving .mk text, .stage.moving .mk rect { cursor: move; }
 .mk text { cursor: default; }
 .gate { position: fixed; inset: 0; background: var(--bg); display: grid; place-items: center; padding: 16px; z-index: 10; }
 .gate form { display: grid; gap: 10px; width: min(340px, 100%); }
@@ -107,10 +107,10 @@ header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; pad
 .world img { display: block; max-width: none; user-select: none; -webkit-user-drag: none; transition: filter .2s; }
 .world.clean img { filter: grayscale(1) contrast(1.08) brightness(1.04); }
 .world svg { position: absolute; inset: 0; overflow: visible; }
-.mk circle.f { fill-opacity: .28; }
-.mk circle.r { fill: none; }
+.mk rect.hit { fill: transparent; }
+.mk rect.f { stroke: rgba(0,0,0,.35); }
 .mk text { font-family: var(--font-data); font-weight: 500; paint-order: stroke; stroke: #fff; stroke-linejoin: round; }
-.mk.sel circle.s { fill: none; stroke: var(--ink); stroke-dasharray: 3 3; }
+.mk.sel rect.s { fill: none; stroke: var(--ink); stroke-dasharray: 3 3; }
 .zoomnote { position: absolute; right: 10px; bottom: 10px; font: 12px var(--font-data); background: var(--panel); border: 1px solid var(--line); padding: 3px 7px; border-radius: 4px; color: var(--muted); pointer-events: none; }
 .empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; }
 .empty .box { max-width: 420px; display: grid; gap: 10px; justify-items: center; }
@@ -396,13 +396,13 @@ function renderStage() {
   $('stage').classList.toggle('moving', S.move);
   $('stage').classList.toggle('editing', S.edit);
   const svg = $('svg'); svg.setAttribute('viewBox', `0 0 ${d.w} ${d.h}`); svg.setAttribute('width', d.w); svg.setAttribute('height', d.h);
-  const hid = hiddenSet(d), R = Math.max(d.w, d.h) * 0.011, byId = Object.fromEntries(d.layers.map((l) => [l.id, l]));
+  const hid = hiddenSet(d), R = Math.max(d.w, d.h) * 0.011, Q = R * 0.5, byId = Object.fromEntries(d.layers.map((l) => [l.id, l]));
   svg.innerHTML = d.marks.filter((m) => byId[m.l] && !hid.has(m.l)).map((m) => {
     const l = byId[m.l], cx = m.x * d.w, cy = m.y * d.h;
     return `<g class="mk ${S.sel === m.id ? 'sel' : ''}" data-id="${m.id}">
-      <circle class="f" cx="${cx}" cy="${cy}" r="${R}" fill="${esc(l.color)}"/>
-      <circle class="r" cx="${cx}" cy="${cy}" r="${R}" stroke="${esc(l.color)}" stroke-width="${R * 0.28}"/>
-      ${S.sel === m.id ? `<circle class="s" cx="${cx}" cy="${cy}" r="${R * 1.6}" stroke-width="${R * 0.12}"/>` : ''}
+      <rect class="hit" x="${cx - R}" y="${cy - R}" width="${R * 2}" height="${R * 2}"/>
+      <rect class="f" x="${cx - Q}" y="${cy - Q}" width="${Q * 2}" height="${Q * 2}" rx="${Q * 0.25}" fill="${esc(l.color)}" stroke-width="${Q * 0.12}"/>
+      ${S.sel === m.id ? `<rect class="s" x="${cx - Q * 1.8}" y="${cy - Q * 1.8}" width="${Q * 3.6}" height="${Q * 3.6}" rx="${Q * 0.4}" stroke-width="${Q * 0.2}"/>` : ''}
       ${S.labels && m.label ? `<text class="lbl" data-id="${m.id}" x="${cx + (m.lx ?? R * 1.3 / d.w) * d.w}" y="${cy + (m.ly ?? -R * 0.9 / d.h) * d.h}" font-size="${R * 1.25}" stroke-width="${R * 0.35}" fill="${esc(l.color)}">${esc(m.label)}</text>` : ''}
     </g>`;
   }).join('');
