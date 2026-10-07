@@ -38,6 +38,8 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(
 img { max-width: 100%; }
 [hidden] { display: none !important; }
 button, input, select { font: inherit; color: inherit; }
+button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.world img { -webkit-touch-callout: none; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -165,8 +167,17 @@ header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; pad
 @media (max-width: 680px) {
   .app { height: auto; }
   .main { grid-template-columns: minmax(0, 1fr); }
-  .stage { height: 62vh; }
+  .brand small { display: none; }
+  .stage { height: 72vh; height: 72svh; }
+  .tools .btn.small { padding: 8px 12px; font-size: 14px; }
+  .tools .title { flex-basis: 100%; }
+  .tools .spacer { display: none; }
+  .switch { width: 40px; height: 24px; border-radius: 12px; }
+  .switch::after { width: 20px; height: 20px; }
+  .switch:checked::after { transform: translateX(16px); }
+  .chip { padding: 6px 12px; }
 }
+@media (hover: none) { .stage { cursor: default; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -472,9 +483,16 @@ function zoomAt(f, px, py) {
 (() => {
   const st = $('stage'), pts = new Map(); let start = null, pinch = null;
   st.addEventListener('wheel', (e) => { e.preventDefault(); const r = st.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+  // Safari's own pinch gestures would zoom the whole page instead of the drawing.
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => st.addEventListener(t, (e) => e.preventDefault()));
+  let lastTap = 0;
+  const panFrom = (p) => { start = { x: p.x, y: p.y, vx: S.view.x, vy: S.view.y, moved: true, target: null }; };
   st.addEventListener('pointerdown', (e) => {
     if (!current()) return;
-    st.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // A primary pointer means no other finger is down, so forget any touch whose "up" the browser never sent.
+    if (e.isPrimary) { pts.clear(); pinch = null; }
+    try { st.setPointerCapture(e.pointerId); } catch {}
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pts.size === 1) {
       start = { x: e.clientX, y: e.clientY, vx: S.view.x, vy: S.view.y, moved: false, target: e.target };
       const d = current(), t = e.target, g = t.closest && t.closest('.mk');
@@ -499,12 +517,18 @@ function zoomAt(f, px, py) {
   });
   const end = (e) => {
     if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId);
-    if (pts.size < 2) pinch = null;
+    if (pinch && pts.size < 2) { pinch = null; if (pts.size === 1) panFrom([...pts.values()][0]); return; }
     if (start && start.drag && start.moved) changed(current());
-    else if (start && !start.moved && e.type === 'pointerup') stageClick(e, start.target);
+    else if (start && !start.moved && e.type === 'pointerup') {
+      const now = Date.now();
+      if (e.pointerType === 'touch' && !S.edit && !S.move && now - lastTap < 300 && !(start.target && start.target.closest && start.target.closest('.mk'))) {
+        const r = st.getBoundingClientRect(); zoomAt(2, e.clientX - r.left, e.clientY - r.top); lastTap = 0;
+      } else { lastTap = now; stageClick(e, start.target); }
+    }
     if (!pts.size) start = null;
   };
   st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
+  st.addEventListener('lostpointercapture', (e) => { if (pts.has(e.pointerId)) end(e); });
   new ResizeObserver(() => { if (current()) applyView(); }).observe(st);
 })();
 function stageClick(e, target) {
