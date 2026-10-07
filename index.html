@@ -339,6 +339,14 @@ function imgSrc(d) {
   return d.thumb || '';
 }
 function thumbSrc(d) { return d.localUrl || d.thumb || S.img[d.id] || ''; }
+// Detail fields: first letter capitalised, cap type all capitals.
+function fixCase(k, v) {
+  if (typeof v !== 'string' || !v) return v;
+  if (k === 'cap') return v.toUpperCase();
+  if (k === 'name' || k === 'bulb' || k === 'finish') return v.charAt(0).toUpperCase() + v.slice(1);
+  return v;
+}
+function tidyLayers(d) { d.layers.forEach((l) => ['name', 'bulb', 'cap', 'finish'].forEach((k) => { if (l[k]) l[k] = fixCase(k, l[k]); })); }
 function specLine(l) { return [l.watt ? l.watt + 'W' : '', l.volt ? l.volt + 'V' : '', l.bulb, l.cap, l.finish].filter(Boolean).join(' · '); }
 function hiddenSet(d) { return new Set(S.hidden[d.id] || []); }
 function setHidden(d, set) { S.hidden[d.id] = [...set]; store('lm.hidden', S.hidden); render(); }
@@ -410,6 +418,7 @@ function filterValues(d) {
 }
 function renderDesk() {
   const d = current(), desk = $('desk');
+  if (d) tidyLayers(d);
   if (!d) { desk.innerHTML = `<div class="sect"><div class="label">Layers</div><p class="note">Each light colour on the drawing becomes a layer you can switch on and off. Filters group layers by wattage, voltage, bulb and cap.</p></div>`; return; }
   const hid = hiddenSet(d), counts = {}, editable = canEditDrawing(d);
   d.marks.forEach((m) => (counts[m.l] = (counts[m.l] || 0) + 1));
@@ -453,12 +462,12 @@ function renderDesk() {
 function layerForm(l) {
   const others = current().layers.filter((o) => o.id !== l.id);
   return `<div class="ledit" data-form="${l.id}">
-    <label class="wide">Name<input data-f="name" value="${esc(l.name)}"></label>
+    <label class="wide">Name<input data-f="name" autocapitalize="sentences" value="${esc(l.name)}"></label>
     <label>Watts<input data-f="watt" type="number" min="0" value="${l.watt ?? ''}"></label>
     <label>Volts<input data-f="volt" type="number" min="0" value="${l.volt ?? ''}"></label>
-    <label>Bulb<input data-f="bulb" value="${esc(l.bulb || '')}" placeholder="GLS, Golfball…"></label>
-    <label>Cap<input data-f="cap" value="${esc(l.cap || '')}" placeholder="ES, BC…"></label>
-    <label>Finish<input data-f="finish" value="${esc(l.finish || '')}" placeholder="Pearl, Clear…"></label>
+    <label>Bulb<input data-f="bulb" autocapitalize="sentences" value="${esc(l.bulb || '')}" placeholder="GLS, Golfball…"></label>
+    <label>Cap<input data-f="cap" autocapitalize="characters" value="${esc(l.cap || '')}" placeholder="ES, BC…"></label>
+    <label>Finish<input data-f="finish" autocapitalize="sentences" value="${esc(l.finish || '')}" placeholder="Pearl, Clear…"></label>
     <label>Colour<input data-f="color" type="color" value="${esc(l.color)}"></label>
     ${others.length ? `<label class="wide">Merge into another layer<select data-merge="${l.id}"><option value="">Choose a layer…</option>${others.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select></label>` : ''}
     <div class="row"><button class="btn small" data-act="donel">Done</button><button class="btn small danger" data-act="dell" data-l="${l.id}">Delete layer and its lights</button></div>
@@ -577,6 +586,12 @@ async function flush(id) {
 
 
 /* ---------- desk events ---------- */
+$('desk').addEventListener('input', (e) => {
+  const t = e.target, k = t.dataset && t.dataset.f;
+  if (!k || t.type !== 'text' && t.type !== '') return;
+  const v = fixCase(k, t.value); if (v === t.value) return;
+  const a = t.selectionStart, b = t.selectionEnd; t.value = v; t.setSelectionRange(a, b);
+});
 $('desk').addEventListener('change', (e) => {
   const d = current(); if (!d) return;
   const t = e.target;
@@ -591,7 +606,7 @@ $('desk').addEventListener('change', (e) => {
   }
   if (t.dataset.f) {
     const l = d.layers.find((x) => x.id === t.closest('[data-form]').dataset.form); if (!l) return;
-    const k = t.dataset.f; let v = t.value.trim();
+    const k = t.dataset.f; let v = fixCase(k, t.value.trim());
     if (k === 'watt' || k === 'volt') v = v === '' ? null : Number(v);
     l[k] = v === '' ? null : v; if (k === 'name' && !l.name) l.name = 'Untitled layer';
     changed(d); renderStage(); renderRail(); return;
