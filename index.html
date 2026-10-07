@@ -468,16 +468,28 @@ function render() { renderRail(); renderStage(); renderDesk(); }
 function applyView() {
   const d = current(); if (!d) return;
   if (S.needFit && $('stage').clientWidth) { S.needFit = false; fit(); return; }
+  clampView(d);
   const v = S.view; $('world').style.transform = `translate(${v.x}px,${v.y}px) scale(${v.s})`;
   $('zoomnote').textContent = Math.round(v.s * 100) + '%';
 }
 function fit() {
   const d = current(); if (!d) return;
   const st = $('stage'), W = st.clientWidth, H = st.clientHeight, s = Math.min(W / d.w, H / d.h) * 0.96;
-  S.view = { s, x: (W - d.w * s) / 2, y: (H - d.h * s) / 2 }; applyView();
+  S.atFit = true; S.view = { s, x: (W - d.w * s) / 2, y: (H - d.h * s) / 2 }; applyView();
+}
+/* Keep the drawing on screen: never smaller than Fit, and no panning past its edges. */
+function fitScale(d) { const st = $('stage'); return Math.min(st.clientWidth / d.w, st.clientHeight / d.h) * 0.96; }
+function clampView(d) {
+  const st = $('stage'), W = st.clientWidth, H = st.clientHeight; if (!W || !H) return;
+  const v = S.view, min = fitScale(d), max = Math.max(12, min * 2);
+  v.s = Math.min(Math.max(v.s, min), max);
+  const w = d.w * v.s, h = d.h * v.s;
+  v.x = w <= W ? (W - w) / 2 : Math.min(0, Math.max(W - w, v.x));
+  v.y = h <= H ? (H - h) / 2 : Math.min(0, Math.max(H - h, v.y));
 }
 function zoomAt(f, px, py) {
-  const v = S.view, s = Math.min(Math.max(v.s * f, 0.02), 12);
+  S.atFit = false;
+  const d = current(), v = S.view, s = Math.min(Math.max(v.s * f, d ? fitScale(d) : 0.02), Math.max(12, d ? fitScale(d) * 2 : 12));
   S.view = { s, x: px - (px - v.x) * (s / v.s), y: py - (py - v.y) * (s / v.s) }; applyView();
 }
 (() => {
@@ -513,7 +525,7 @@ function zoomAt(f, px, py) {
         else { g.m.x = +Math.min(1, Math.max(0, g.x + ux)).toFixed(4); g.m.y = +Math.min(1, Math.max(0, g.y + uy)).toFixed(4); }
         renderStage(); return;
       }
-      S.view.x = start.vx + dx; S.view.y = start.vy + dy; applyView(); } }
+      S.atFit = false; S.view.x = start.vx + dx; S.view.y = start.vy + dy; applyView(); } }
   });
   const end = (e) => {
     if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId);
@@ -529,7 +541,7 @@ function zoomAt(f, px, py) {
   };
   st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
   st.addEventListener('lostpointercapture', (e) => { if (pts.has(e.pointerId)) end(e); });
-  new ResizeObserver(() => { if (current()) applyView(); }).observe(st);
+  new ResizeObserver(() => { if (current()) { if (S.atFit) fit(); else applyView(); } }).observe(st);
 })();
 function stageClick(e, target) {
   const d = current(); if (!d) return;
