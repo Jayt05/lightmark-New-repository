@@ -814,6 +814,22 @@ function start() {
   S.canWrite = true; S.canAdmin = true;
   $('gate').hidden = true; $('upload').hidden = false;
   refresh(); setInterval(() => { if (!document.hidden && !S.edit && !S.move) refresh(); }, 15000);
+  // Catch up straight away when the phone wakes or the tab comes back into view.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !S.edit && !S.move) { refresh(); checkForNewVersion(); } });
+  setInterval(checkForNewVersion, 5 * 60 * 1000);
+}
+/* Reload into a newer version of the site once one is published, when nobody is mid-edit. */
+let pageText = null, updateReady = false;
+async function fetchPage() { try { const r = await fetch(location.href.split('#')[0], { cache: 'no-store' }); return r.ok ? await r.text() : null; } catch { return null; } }
+fetchPage().then((t) => { pageText = t; });
+async function checkForNewVersion() {
+  if (updateReady || !pageText || document.hidden) return;
+  const t = await fetchPage();
+  if (!t || t === pageText) return;
+  updateReady = true;
+  const busy = () => S.edit || S.move || Object.values(saving).some((x) => x.busy || x.dirty) || !$('progress').hidden;
+  const go = () => { if (busy()) return setTimeout(go, 5000); location.reload(); };
+  toast('Lightmark has been updated. Reloading…', 2500); setTimeout(go, 2500);
 }
 $('example').onclick = async () => {
   const b = $('example'); b.disabled = true; b.textContent = 'Adding the example…';
