@@ -198,6 +198,9 @@ header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; pad
     <div class="spacer"></div>
     <span id="who" class="note"></span>
     <input id="file" type="file" accept="image/*,application/pdf" multiple hidden>
+    <input id="importfile" type="file" accept="application/json,.json" hidden>
+    <button id="exportbtn" class="btn small" hidden title="Save every drawing and folder to one file, to back up or move to another Lightmark">Export all</button>
+    <button id="importbtn" class="btn small" hidden title="Add drawings from a Lightmark export file">Import</button>
     <button id="upload" class="btn primary" hidden>Upload drawing</button>
   </header>
   <div class="main">
@@ -774,7 +777,7 @@ async function redetect(d) {
 const CONFIG = { url: 'https://zkolfqjkxwluyrscdoba.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inprb2xmcWpreHdsdXlyc2Nkb2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNjcyMTgsImV4cCI6MjEwNjk0MzIxOH0.63V7u9XbdHQyKmHunhdNQB0Xqc_wPGl_keTjH-nPCsg' };
 const API = {
   pass: store('lm.pass') || '',
-  configured() { return /^https:\/\//.test(CONFIG.url) && CONFIG.key.length > 20; },
+  configured() { return !!CONFIG.local || (/^https:\/\//.test(CONFIG.url) && CONFIG.key.length > 20); },
   async req(path, opts = {}, pass = this.pass) {
     const r = await fetch(CONFIG.url.replace(/\/$/, '') + '/rest/v1/' + path, {
       ...opts,
@@ -822,7 +825,7 @@ async function refresh() {
 }
 function start() {
   S.canWrite = true; S.canAdmin = true;
-  $('gate').hidden = true; $('upload').hidden = false;
+  $('gate').hidden = true; $('upload').hidden = false; $('exportbtn').hidden = false; $('importbtn').hidden = false;
   refresh(); setInterval(() => { if (!document.hidden && !S.edit && !S.move) refresh(); }, 15000);
   // Catch up straight away when the phone wakes or the tab comes back into view.
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !S.edit && !S.move) { refresh(); checkForNewVersion(); } });
@@ -841,6 +844,43 @@ async function checkForNewVersion() {
   const go = () => { if (busy()) return setTimeout(go, 5000); location.reload(); };
   toast('Lightmark has been updated. Reloading…', 2500); setTimeout(go, 2500);
 }
+
+/* ---------- export / import ---------- */
+$('exportbtn').onclick = async () => {
+  const b = $('exportbtn'); b.disabled = true;
+  try {
+    const rows = await API.list(), folders = S.hasFolders ? await API.folders() : [], out = [];
+    for (let i = 0; i < rows.length; i++) { b.textContent = `Exporting ${i + 1}/${rows.length}…`; out.push({ ...rows[i], image: await API.image(rows[i].id) }); }
+    const blob = new Blob([JSON.stringify({ lightmark: 1, exported: new Date().toISOString(), folders, drawings: out })], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `lightmark-export-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    toast(`Exported ${out.length} drawings. Keep the file somewhere safe: it contains the drawings.`, 6000);
+  } catch { toast('Couldn’t export. Check your connection and try again.'); }
+  b.disabled = false; b.textContent = 'Export all';
+};
+$('importbtn').onclick = () => $('importfile').click();
+$('importfile').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const b = $('importbtn'); b.disabled = true;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!data || data.lightmark !== 1 || !Array.isArray(data.drawings)) throw new Error('not an export');
+    const folderMap = {};
+    if (S.hasFolders) for (const fo of data.folders || []) {
+      const have = S.folders.find((x) => x.name === fo.name);
+      folderMap[fo.id] = have ? have.id : (await API.createFolder(fo.name)).id;
+    }
+    let n = 0;
+    for (const d of data.drawings) {
+      if (!d.image) continue;
+      b.textContent = `Importing ${++n}/${data.drawings.length}…`;
+      const row = await API.create({ name: d.name, w: d.w, h: d.h, ai: d.ai, thumb: d.thumb, layers: d.layers || [], marks: d.marks || [] }, d.image);
+      if (S.hasFolders && d.folder && folderMap[d.folder]) await API.setFolder(row.id, folderMap[d.folder]);
+    }
+    toast(`Imported ${n} drawings`); await refresh();
+  } catch { toast('That file isn’t a Lightmark export, or the import stopped part way. Drawings already added are kept.', 6000); }
+  b.disabled = false; b.textContent = 'Import';
+};
 
 /* ---------- password gate ---------- */
 async function tryPass(p) {
