@@ -54,18 +54,39 @@ header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; pad
 .btn.danger { color: var(--danger); }
 .btn[disabled] { opacity: .5; cursor: default; }
 
-.main { display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 12px; min-height: 0; }
+.main { display: grid; grid-template-columns: 250px minmax(0, 1fr) 300px; gap: 12px; min-height: 0; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-height: 0; overflow: auto; }
 .label { font: 600 11px var(--font-body); text-transform: uppercase; letter-spacing: .09em; color: var(--muted); }
 
 /* drawings rail */
-.rail { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.rail { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-x: hidden; }
 .dwg { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; align-items: center; padding: 6px; border-radius: 6px; border: 1px solid transparent; background: none; text-align: left; width: 100%; }
 .dwg:hover { border-color: var(--line); }
 .dwg.sel { border-color: var(--accent); background: var(--accent-soft); }
 .dwg img { width: 56px; height: 42px; object-fit: cover; border-radius: 4px; background: var(--stage); display: block; }
 .dwg .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dwg .m { font: 12px var(--font-data); color: var(--muted); }
+.dwg.dragging { opacity: .4; }
+.fitems, .folder, .fhead { min-width: 0; }
+.fitems .dwg { grid-template-columns: 44px minmax(0, 1fr); }
+.fitems .dwg img { width: 44px; height: 33px; }
+.rail-h { display: flex; align-items: center; gap: 8px; }
+.rail-h .label { flex: 1; }
+.folder { display: grid; gap: 4px; }
+.fhead { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 6px; border: 1px dashed transparent; }
+.fhead.drop { border-color: var(--accent); background: var(--accent-soft); }
+.fhead .ftoggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; text-align: left; font-weight: 600; }
+.fhead .ftoggle span.n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fhead .ct { font: 12px var(--font-data); color: var(--muted); }
+.fhead .chev { width: 10px; color: var(--muted); font-size: 10px; transition: transform .15s; }
+.folder.closed .chev { transform: rotate(-90deg); }
+.folder.closed .fitems { display: none; }
+.fitems { display: grid; gap: 4px; padding-left: 8px; border-left: 1px solid var(--line); margin-left: 10px; }
+.fhead input { flex: 1; min-width: 0; border: 1px solid var(--accent); border-radius: 4px; padding: 3px 6px; background: var(--bg); }
+.iconbtn { background: none; border: 0; padding: 2px 4px; color: var(--muted); font-size: 12px; border-radius: 4px; }
+.iconbtn:hover { color: var(--ink); background: var(--bg); }
+.dfield { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+.dfield input, .dfield select { border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px; background: var(--bg); font-size: 14px; color: var(--ink); }
 
 /* stage */
 .stagewrap { display: grid; grid-template-rows: auto 1fr; min-height: 0; gap: 8px; }
@@ -139,8 +160,7 @@ header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; pad
 
 @media (max-width: 980px) {
   .main { grid-template-columns: minmax(0, 1fr) 280px; }
-  .rail { grid-column: 1 / -1; flex-direction: row; overflow-x: auto; }
-  .dwg { width: 220px; flex: none; }
+  .rail { grid-column: 1 / -1; max-height: 260px; }
 }
 @media (max-width: 680px) {
   .app { height: auto; }
@@ -285,7 +305,7 @@ function detectMarks(canvas) {
 
 const $ = (id) => document.getElementById(id);
 const S = {
-  canWrite: false, canAdmin: false, img: {}, imgLoading: {},
+  canWrite: false, canAdmin: false, img: {}, imgLoading: {}, folders: [], hasFolders: false, renaming: null, confirmFolder: null, dragId: null,
   drawings: [], local: [], cur: null, hidden: {}, clean: false, labels: true, edit: false,
   activeLayer: null, sel: null, move: false, editLayer: null, view: { s: 1, x: 0, y: 0 }, confirmDel: false,
 };
@@ -311,13 +331,32 @@ function hiddenSet(d) { return new Set(S.hidden[d.id] || []); }
 function setHidden(d, set) { S.hidden[d.id] = [...set]; store('lm.hidden', S.hidden); render(); }
 
 /* ---------- rendering ---------- */
-function renderRail() {
-  const list = allDrawings();
-  $('rail').innerHTML = `<div class="label">Drawings · ${list.length}</div>` + (list.length ? list.map((d) => `
-    <button class="dwg ${d.id === S.cur ? 'sel' : ''}" data-id="${esc(d.id)}">
+function dwgButton(d) {
+  return `<button class="dwg ${d.id === S.cur ? 'sel' : ''}" data-id="${esc(d.id)}" ${S.hasFolders && !d.localUrl ? 'draggable="true"' : ''}>
       <img src="${esc(thumbSrc(d))}" alt="" loading="lazy">
       <span style="min-width:0"><div class="t">${esc(d.name)}</div><div class="m">${d.marks.length} lights · ${d.layers.length} layers${d.localUrl ? ' · this device only' : ''}</div></span>
-    </button>`).join('') : `<p class="note">Nothing uploaded yet.</p>`);
+    </button>`;
+}
+function folderClosed(id) { return (store('lm.closed') || []).includes(id); }
+function renderRail() {
+  const list = allDrawings();
+  let html = `<div class="rail-h"><span class="label">Drawings · ${list.length}</span>${S.hasFolders ? '<button class="linkbtn" data-fact="new">New folder</button>' : ''}</div>`;
+  if (!list.length && !S.folders.length) { $('rail').innerHTML = html + `<p class="note">Nothing uploaded yet.</p>`; return; }
+  const known = new Set(S.folders.map((f) => f.id));
+  const sections = S.folders.map((f) => ({ id: f.id, name: f.name, items: list.filter((d) => d.folder === f.id) }));
+  const loose = list.filter((d) => !d.folder || !known.has(d.folder));
+  if (S.folders.length) sections.push({ id: '', name: 'Unfiled', items: loose });
+  else { $('rail').innerHTML = html + loose.map(dwgButton).join(''); return; }
+  html += sections.map((f) => {
+    const closed = folderClosed(f.id || '_unfiled');
+    let head;
+    if (f.id && S.renaming === f.id) head = `<input id="frename" value="${esc(f.name)}" data-fid="${esc(f.id)}" aria-label="Folder name" maxlength="60"><button class="iconbtn" data-fact="renok" data-fid="${esc(f.id)}">Save</button>`;
+    else if (f.id && S.confirmFolder === f.id) head = `<span class="note" style="flex:1">Delete “${esc(f.name)}”? Its drawings move to Unfiled.</span><button class="iconbtn" data-fact="delok" data-fid="${esc(f.id)}" style="color:var(--danger)">Delete</button><button class="iconbtn" data-fact="delno">Keep</button>`;
+    else head = `<button class="ftoggle" data-fact="toggle" data-fid="${esc(f.id || '_unfiled')}" aria-expanded="${!closed}"><span class="chev">▼</span><span class="n">${esc(f.name)}</span></button><span class="ct">${f.items.length}</span>${f.id ? `<button class="iconbtn" data-fact="ren" data-fid="${esc(f.id)}" title="Rename folder" aria-label="Rename folder">✎</button><button class="iconbtn" data-fact="del" data-fid="${esc(f.id)}" title="Delete folder" aria-label="Delete folder">✕</button>` : ''}`;
+    return `<div class="folder ${closed ? 'closed' : ''}"><div class="fhead" data-drop="${esc(f.id)}">${head}</div><div class="fitems">${f.items.length ? f.items.map(dwgButton).join('') : `<p class="note" style="margin:4px 0">${f.id ? 'Drag drawings here, or pick this folder under Drawing on the right.' : 'Nothing unfiled.'}</p>`}</div></div>`;
+  }).join('');
+  $('rail').innerHTML = html;
+  const ri = $('frename'); if (ri && document.activeElement !== ri) { ri.focus(); ri.select(); }
 }
 function renderStage() {
   const d = current();
@@ -392,6 +431,8 @@ function renderDesk() {
     ${S.canWrite || d.localUrl ? `<button class="btn small" data-act="redetect">Re-detect lights</button>` : ''}
   </div>` : ''}
   <div class="sect"><div class="label">Drawing</div>
+    ${editable && !d.localUrl ? `<label class="dfield">Name<input id="dname-in" value="${esc(d.name)}" maxlength="120"></label>` : ''}
+    ${S.hasFolders && !d.localUrl ? `<label class="dfield">Folder<select id="dfolder"><option value="">Unfiled</option>${S.folders.map((f) => `<option value="${esc(f.id)}" ${d.folder === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>` : ''}
     <div class="note">${d.ai ? 'Layers were set up from the drawing’s legend.' : 'Lights are grouped by colour. Turn on Edit marks to name each layer from your legend, and delete any layer that picked up something that isn’t a light.'} ${d.localUrl ? 'This drawing hasn’t been saved and will be gone when you close the page.' : ''}</div>
     ${editable && !d.localUrl && S.canAdmin ? (S.confirmDel ? `<div class="confirm">Delete this drawing for everyone? <button class="btn small danger" data-act="delyes">Delete</button><button class="btn small" data-act="delno">Keep</button></div>` : `<button class="btn small danger" data-act="del">Delete drawing</button>`) : ''}
   </div>`;
@@ -502,6 +543,8 @@ $('desk').addEventListener('change', (e) => {
   const d = current(); if (!d) return;
   const t = e.target;
   if (t.dataset.toggle) { const h = hiddenSet(d); t.checked ? h.delete(t.dataset.toggle) : h.add(t.dataset.toggle); setHidden(d, h); return; }
+  if (t.id === 'dfolder') { moveToFolder(d, t.value); return; }
+  if (t.id === 'dname-in') { d.name = t.value.trim().slice(0, 120) || d.name; changed(d); renderRail(); $('dname').textContent = d.name; return; }
   if (t.dataset.merge && t.value) {
     const from = t.dataset.merge, to = t.value;
     d.marks.forEach((m) => { if (m.l === from) m.l = to; });
@@ -546,7 +589,47 @@ $('desk').addEventListener('click', (e) => {
   if (act === 'delno') { S.confirmDel = false; renderDesk(); }
   if (act === 'delyes') deleteDrawing(d);
 });
-$('rail').addEventListener('click', (e) => { const b = e.target.closest('.dwg'); if (!b) return; select(b.dataset.id); });
+$('rail').addEventListener('click', async (e) => {
+  const f = e.target.closest('[data-fact]');
+  if (f) {
+    const act = f.dataset.fact, id = f.dataset.fid;
+    if (act === 'toggle') { const c = new Set(store('lm.closed') || []); c.has(id) ? c.delete(id) : c.add(id); store('lm.closed', [...c]); renderRail(); }
+    if (act === 'new') { try { const row = await API.createFolder('New folder'); S.folders.push(row); S.renaming = row.id; renderRail(); } catch { toast('Couldn’t create the folder. Check your connection and try again.'); } }
+    if (act === 'ren') { S.renaming = id; S.confirmFolder = null; renderRail(); }
+    if (act === 'renok') finishRename();
+    if (act === 'del') { S.confirmFolder = id; S.renaming = null; renderRail(); }
+    if (act === 'delno') { S.confirmFolder = null; renderRail(); }
+    if (act === 'delok') {
+      S.confirmFolder = null;
+      try { await API.deleteFolder(id); S.folders = S.folders.filter((x) => x.id !== id); S.drawings.forEach((d) => { if (d.folder === id) d.folder = null; }); render(); toast('Folder deleted'); }
+      catch { toast('Couldn’t delete the folder. Try again.'); renderRail(); }
+    }
+    return;
+  }
+  const b = e.target.closest('.dwg'); if (!b) return; select(b.dataset.id);
+});
+async function finishRename() {
+  const i = $('frename'); if (!i) return;
+  const id = i.dataset.fid, name = i.value.trim().slice(0, 60) || 'Untitled folder', f = S.folders.find((x) => x.id === id);
+  S.renaming = null;
+  if (f && f.name !== name) { f.name = name; try { await API.renameFolder(id, name); } catch { toast('Couldn’t rename the folder. Try again.'); } }
+  render();
+}
+$('rail').addEventListener('keydown', (e) => {
+  if (e.target.id !== 'frename') return;
+  if (e.key === 'Enter') { e.preventDefault(); finishRename(); }
+  if (e.key === 'Escape') { S.renaming = null; renderRail(); }
+});
+$('rail').addEventListener('focusout', (e) => { if (e.target.id === 'frename' && !(e.relatedTarget && e.relatedTarget.dataset && e.relatedTarget.dataset.fact === 'renok')) finishRename(); });
+async function moveToFolder(d, folder) {
+  if (!d || d.localUrl || (d.folder || null) === (folder || null)) return;
+  d.folder = folder || null; render();
+  try { await API.setFolder(d.id, d.folder); } catch { toast('Couldn’t move the drawing. Try again.'); }
+}
+$('rail').addEventListener('dragstart', (e) => { const b = e.target.closest('.dwg'); if (!b) return; S.dragId = b.dataset.id; b.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', b.dataset.id); });
+$('rail').addEventListener('dragend', (e) => { const b = e.target.closest('.dwg'); if (b) b.classList.remove('dragging'); S.dragId = null; document.querySelectorAll('.fhead.drop').forEach((x) => x.classList.remove('drop')); });
+$('rail').addEventListener('dragover', (e) => { const h = e.target.closest('[data-drop]'); if (!h || !S.dragId) return; e.preventDefault(); document.querySelectorAll('.fhead.drop').forEach((x) => x !== h && x.classList.remove('drop')); h.classList.add('drop'); });
+$('rail').addEventListener('drop', (e) => { const h = e.target.closest('[data-drop]'); if (!h || !S.dragId) return; e.preventDefault(); h.classList.remove('drop'); moveToFolder(allDrawings().find((x) => x.id === S.dragId), h.dataset.drop); });
 function select(id) { S.cur = id; S.sel = null; S.editLayer = null; S.confirmDel = false; S.activeLayer = null; S.needFit = true; store('lm.cur', id); render(); }
 $('fit').onclick = fit;
 $('zin').onclick = () => { const st = $('stage'); zoomAt(1.3, st.clientWidth / 2, st.clientHeight / 2); };
@@ -666,7 +749,16 @@ const API = {
     const t = await r.text(); return t ? JSON.parse(t) : null;
   },
   check(p) { return this.req('rpc/lm_pass_ok', { method: 'POST', body: '{}' }, p).then((x) => x === true); },
-  list() { return this.req('drawings?select=id,name,w,h,created,ai,thumb,layers,marks&order=created.desc'); },
+  async list() {
+    const cols = 'id,name,w,h,created,ai,thumb,layers,marks';
+    try { const rows = await this.req('drawings?select=' + cols + ',folder&order=created.desc'); S.hasFolders = true; return rows; }
+    catch (e) { if (e.status !== 400 && e.status !== 404) throw e; S.hasFolders = false; return this.req('drawings?select=' + cols + '&order=created.desc'); }
+  },
+  folders() { return this.req('folders?select=id,name,created&order=name.asc'); },
+  async createFolder(name) { const [row] = await this.req('folders', { method: 'POST', body: JSON.stringify({ name }), headers: { Prefer: 'return=representation' } }); return row; },
+  renameFolder(id, name) { return this.req('folders?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify({ name }), headers: { Prefer: 'return=minimal' } }); },
+  deleteFolder(id) { return this.req('folders?id=eq.' + encodeURIComponent(id), { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); },
+  setFolder(id, folder) { return this.req('drawings?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify({ folder }), headers: { Prefer: 'return=minimal' } }); },
   image(id) { return this.req('drawing_images?select=data&id=eq.' + encodeURIComponent(id)).then((r) => (r && r[0] ? r[0].data : null)); },
   save(d) { return this.req('drawings?id=eq.' + encodeURIComponent(d.id), { method: 'PATCH', body: JSON.stringify({ name: d.name, ai: !!d.ai, layers: d.layers, marks: d.marks }), headers: { Prefer: 'return=minimal' } }); },
   async create(d, image) {
@@ -682,7 +774,7 @@ const API = {
 async function refresh() {
   if (!S.canWrite) return;
   let rows;
-  try { rows = await API.list(); } catch { $('emptynote').textContent = 'Drawings couldn’t be loaded. Check your connection and reload the page.'; return; }
+  try { rows = await API.list(); if (S.hasFolders) { const fs = await API.folders(); if (!S.renaming) S.folders = fs; } } catch { $('emptynote').textContent = 'Drawings couldn’t be loaded. Check your connection and reload the page.'; return; }
   S.drawings = rows.map((r) => {
     const st = saving[r.id], mine = st && (st.busy || st.dirty) && S.drawings.find((x) => x.id === r.id);
     return mine || { layers: [], marks: [], ...r };
@@ -691,6 +783,7 @@ async function refresh() {
   if (!current()) { S.cur = (S.drawings.find((x) => x.id === last) || S.drawings[0] || S.local[0] || {}).id || null; S.needFit = true; }
   $('emptynote').textContent = 'Drawings you upload here are shared with everyone who has the link and password.';
   $('example').hidden = S.drawings.length > 0;
+  if (S.renaming || S.confirmFolder || S.dragId || (document.activeElement && document.activeElement.id === 'dname-in')) return;
   if (!S.edit || !S.drawings.some((x) => x.id === S.cur)) render(); else { renderRail(); }
 }
 function start() {
