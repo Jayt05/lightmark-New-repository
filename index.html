@@ -445,7 +445,10 @@ function renderDesk() {
   }).filter((a) => a.vals.length > 1 || (a.vals.length === 1 && a.vals[0] !== ''));
   const fv = filterValues(d);
   const sm = S.sel && d.marks.find((m) => m.id === S.sel);
-  const keepTop = desk.scrollTop, keepPage = window.scrollY;
+  const keepTop = desk.scrollTop, keepPage = window.scrollY, ae = document.activeElement;
+  // Remember which box had focus so typing and Tab carry on after the panel redraws.
+  const fsel = ae && desk.contains(ae) ? (ae.id ? '#' + ae.id : ae.dataset.mf ? `[data-mf="${ae.dataset.mf}"]` : ae.dataset.f && ae.closest('[data-form]') ? `[data-form="${ae.closest('[data-form]').dataset.form}"] [data-f="${ae.dataset.f}"]` : ae.dataset.act ? `[data-act="${ae.dataset.act}"]` : null) : null;
+  const fpos = fsel && ae.selectionStart != null ? [ae.selectionStart, ae.selectionEnd] : null;
   desk.innerHTML = `
   <div class="sect">
     <div class="sect-h"><span class="label">Layers</span><button class="linkbtn" data-act="all">Show all</button><button class="linkbtn" data-act="none">Hide all</button></div>
@@ -483,6 +486,8 @@ function renderDesk() {
     ${editable && !d.localUrl && S.canAdmin ? (S.confirmDel ? `<div class="confirm">Delete this drawing for everyone? <button class="btn small danger" data-act="delyes">Delete</button><button class="btn small" data-act="delno">Keep</button></div>` : `<button class="btn small danger" data-act="del">Delete drawing</button>`) : ''}
   </div>`;
   // Re-rendering the panel must not move it: put the scroll back where it was.
+  const nf = fsel && desk.querySelector(fsel);
+  if (nf) { nf.focus({ preventScroll: true }); if (fpos) try { nf.setSelectionRange(fpos[0], fpos[1]); } catch {} }
   desk.scrollTop = keepTop; if (window.scrollY !== keepPage) window.scrollTo(0, keepPage);
   requestAnimationFrame(() => { if (desk.scrollTop !== keepTop) desk.scrollTop = keepTop; });
 }
@@ -649,7 +654,7 @@ $('desk').addEventListener('change', (e) => {
   if (t.dataset.mf) {
     const m = d.marks.find((x) => x.id === S.sel); if (!m) return;
     const v = fixCase('name', t.value.trim().slice(0, 24)); if (v) m[t.dataset.mf] = v; else delete m[t.dataset.mf];
-    changed(d); render(); return;
+    changed(d); setTimeout(render); return;
   }
   if (t.id === 'selLabelShow') {
     const m = d.marks.find((x) => x.id === S.sel); if (!m) return;
@@ -659,7 +664,7 @@ $('desk').addEventListener('change', (e) => {
   if (t.id === 'selLayer' || t.id === 'selLabel') {
     const m = d.marks.find((x) => x.id === S.sel); if (!m) return;
     if (t.id === 'selLayer') m.l = t.value; else m.label = fixCase('name', t.value.trim().slice(0, 24));
-    changed(d); render();
+    changed(d); setTimeout(render);
   }
 });
 $('desk').addEventListener('click', (e) => {
