@@ -466,7 +466,7 @@ function renderDesk() {
   ${S.edit ? `<div class="sect"><div class="label">Editing</div>
     ${sm ? `<div class="markedit"><div class="row"><b>Selected light</b></div>
       <div class="row"><select id="selLayer">${d.layers.map((l) => `<option value="${l.id}" ${l.id === sm.l ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>
-      <input id="selLabel" placeholder="Label, e.g. 9.3" value="${esc(sm.label || '')}" size="8"></div>
+      <input id="selLabel" autocapitalize="sentences" placeholder="Label, e.g. 9.3" value="${esc(sm.label || '')}" size="8"></div>
       <div class="mfields">${MARK_FIELDS.map(([k, name, ph]) => `<label>${name}<input data-mf="${k}" placeholder="${ph}" value="${esc(sm[k] || '')}" autocapitalize="characters"></label>`).join('')}</div>
       <div class="row"><button class="btn small danger" data-act="delmark">Remove light</button><button class="btn small" data-act="desel">Done</button></div></div>`
     : `<p class="note">Click the drawing to add a light to the highlighted layer. Click a light to change its layer or label.</p>`}
@@ -615,7 +615,7 @@ async function flush(id) {
 
 /* ---------- desk events ---------- */
 $('desk').addEventListener('input', (e) => {
-  const t = e.target, k = t.dataset && t.dataset.f;
+  const t = e.target, k = t.id === 'selLabel' || (t.dataset && t.dataset.mf) ? 'name' : t.dataset && t.dataset.f;
   if (!k || t.type !== 'text' && t.type !== '') return;
   const v = fixCase(k, t.value); if (v === t.value) return;
   const a = t.selectionStart, b = t.selectionEnd; t.value = v; t.setSelectionRange(a, b);
@@ -641,12 +641,12 @@ $('desk').addEventListener('change', (e) => {
   }
   if (t.dataset.mf) {
     const m = d.marks.find((x) => x.id === S.sel); if (!m) return;
-    const v = t.value.trim().slice(0, 24); if (v) m[t.dataset.mf] = v; else delete m[t.dataset.mf];
+    const v = fixCase('name', t.value.trim().slice(0, 24)); if (v) m[t.dataset.mf] = v; else delete m[t.dataset.mf];
     changed(d); render(); return;
   }
   if (t.id === 'selLayer' || t.id === 'selLabel') {
     const m = d.marks.find((x) => x.id === S.sel); if (!m) return;
-    if (t.id === 'selLayer') m.l = t.value; else m.label = t.value.trim().slice(0, 24);
+    if (t.id === 'selLayer') m.l = t.value; else m.label = fixCase('name', t.value.trim().slice(0, 24));
     changed(d); render();
   }
 });
