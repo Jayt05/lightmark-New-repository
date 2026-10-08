@@ -887,21 +887,23 @@ async function refresh() {
   let rows;
   try { rows = await API.list(); if (S.hasFolders) { const fs = await API.folders(); if (!S.renaming) S.folders = fs; } } catch { $('emptynote').textContent = 'Drawings couldn’t be loaded. Check your connection and reload the page.'; return; }
   S.drawings = rows.map((r) => {
-    const st = saving[r.id], mine = st && (st.busy || st.dirty) && S.drawings.find((x) => x.id === r.id);
+    // Keep our own copy of a drawing that is being saved, or that is open while editing, moving or resizing.
+    const st = saving[r.id], busy = (st && (st.busy || st.dirty)) || (r.id === S.cur && (S.edit || S.move || S.resize));
+    const mine = busy && S.drawings.find((x) => x.id === r.id);
     return mine || { layers: [], marks: [], ...r };
   });
   const last = store('lm.cur');
   if (!current()) { S.cur = (S.drawings.find((x) => x.id === last) || S.drawings[0] || S.local[0] || {}).id || null; S.needFit = true; }
   $('emptynote').textContent = 'Drawings you upload here are shared with everyone who has the link and password.';
   if (S.renaming || S.confirmFolder || S.dragId || (document.activeElement && document.activeElement.id === 'dname-in')) return;
-  if (!S.edit || !S.drawings.some((x) => x.id === S.cur)) render(); else { renderRail(); }
+  if (!(S.edit || S.move || S.resize) || !S.drawings.some((x) => x.id === S.cur)) render(); else { renderRail(); }
 }
 function start() {
   S.canWrite = true; S.canAdmin = true;
   $('gate').hidden = true; $('upload').hidden = false; $('exportbtn').hidden = false; $('importbtn').hidden = false;
-  refresh(); setInterval(() => { if (!document.hidden && !S.edit && !S.move && !S.resize) refresh(); }, 15000);
+  refresh(); setInterval(() => { if (!document.hidden) refresh(); }, 15000);
   // Catch up straight away when the phone wakes or the tab comes back into view.
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && !S.edit && !S.move && !S.resize) { refresh(); checkForNewVersion(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { refresh(); checkForNewVersion(); } });
   setInterval(checkForNewVersion, 5 * 60 * 1000);
 }
 /* Reload into a newer version of the site once one is published, when nobody is mid-edit. */
