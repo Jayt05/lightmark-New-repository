@@ -57,7 +57,7 @@ header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; pad
 .btn[disabled] { opacity: .5; cursor: default; }
 
 .main { display: grid; grid-template-columns: 250px minmax(0, 1fr) 300px; gap: 12px; min-height: 0; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-height: 0; overflow: auto; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-height: 0; overflow: auto; overflow-anchor: none; }
 .label { font: 600 11px var(--font-body); text-transform: uppercase; letter-spacing: .09em; color: var(--muted); }
 
 /* drawings rail */
@@ -443,6 +443,7 @@ function renderDesk() {
   }).filter((a) => a.vals.length > 1 || (a.vals.length === 1 && a.vals[0] !== ''));
   const fv = filterValues(d);
   const sm = S.sel && d.marks.find((m) => m.id === S.sel);
+  const keepTop = desk.scrollTop, keepPage = window.scrollY;
   desk.innerHTML = `
   <div class="sect">
     <div class="sect-h"><span class="label">Layers</span><button class="linkbtn" data-act="all">Show all</button><button class="linkbtn" data-act="none">Hide all</button></div>
@@ -478,6 +479,9 @@ function renderDesk() {
     <div class="note">${d.ai ? 'Layers were set up from the drawing’s legend.' : 'Lights are grouped by colour. Turn on Edit marks to name each layer from your legend, and delete any layer that picked up something that isn’t a light.'} ${d.localUrl ? 'This drawing hasn’t been saved and will be gone when you close the page.' : ''}</div>
     ${editable && !d.localUrl && S.canAdmin ? (S.confirmDel ? `<div class="confirm">Delete this drawing for everyone? <button class="btn small danger" data-act="delyes">Delete</button><button class="btn small" data-act="delno">Keep</button></div>` : `<button class="btn small danger" data-act="del">Delete drawing</button>`) : ''}
   </div>`;
+  // Re-rendering the panel must not move it: put the scroll back where it was.
+  desk.scrollTop = keepTop; if (window.scrollY !== keepPage) window.scrollTo(0, keepPage);
+  requestAnimationFrame(() => { if (desk.scrollTop !== keepTop) desk.scrollTop = keepTop; });
 }
 function layerForm(l) {
   const others = current().layers.filter((o) => o.id !== l.id);
