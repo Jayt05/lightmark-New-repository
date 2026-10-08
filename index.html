@@ -356,9 +356,11 @@ function hiddenSet(d) { return new Set(S.hidden[d.id] || []); }
 function setHidden(d, set) { S.hidden[d.id] = [...set]; store('lm.hidden', S.hidden); render(); }
 // Per-light details. Battery, soca and universe can be used as filters; '' stands for lights with the box left empty.
 const MARK_FIELDS = [['bat', 'Battery', 'e.g. B1', true], ['soca', 'Soca', 'e.g. S3', true], ['addr', 'Address', 'e.g. 101', false], ['uni', 'Universe', 'e.g. 1', true]];
+// Value a light is filtered under. Soca groups by the part before the dot, so 13.4 and 13.5 both file under 13.
+function markKey(k, m) { const v = m[k] || ''; return k === 'soca' ? v.split('.')[0].trim() : v; }
 function markHide(d) { return S.mhide[d.id] || {}; }
 function setMarkHide(d, mh) { S.mhide[d.id] = mh; store('lm.mhide', S.mhide); render(); }
-function markShown(d, m, hid) { const mh = markHide(d); return !hid.has(m.l) && MARK_FIELDS.every(([k]) => !(mh[k] || []).includes(m[k] || '')); }
+function markShown(d, m, hid) { const mh = markHide(d); return !hid.has(m.l) && MARK_FIELDS.every(([k]) => !(mh[k] || []).includes(markKey(k, m))); }
 function markDetails(m) { return MARK_FIELDS.filter(([k]) => m[k]).map(([k, name]) => `${name} ${m[k]}`).join(' · '); }
 
 /* ---------- rendering ---------- */
@@ -436,7 +438,7 @@ function renderDesk() {
   d.marks.forEach((m) => (counts[m.l] = (counts[m.l] || 0) + 1));
   const visibleLights = d.marks.filter((m) => markShown(d, m, hid)).length;
   const mh = markHide(d), mfv = MARK_FIELDS.filter((f) => f[3]).map(([k, name]) => {
-    const vals = [...new Set(d.marks.map((m) => m[k] || ''))].sort((a, b) => (a === '') - (b === '') || a.localeCompare(b, undefined, { numeric: true }));
+    const vals = [...new Set(d.marks.map((m) => markKey(k, m)))].sort((a, b) => (a === '') - (b === '') || a.localeCompare(b, undefined, { numeric: true }));
     return { k, name, vals };
   }).filter((a) => a.vals.length > 1 || (a.vals.length === 1 && a.vals[0] !== ''));
   const fv = filterValues(d);
@@ -653,7 +655,7 @@ $('desk').addEventListener('click', (e) => {
   const mchip = e.target.closest('[data-mk]');
   if (mchip) {
     const k = mchip.dataset.mk, v = mchip.dataset.mv, mh = { ...markHide(d) }, cur = new Set(mh[k] || []);
-    if (e.detail >= 2) mh[k] = [...new Set(d.marks.map((m) => m[k] || ''))].filter((x) => x !== v);
+    if (e.detail >= 2) mh[k] = [...new Set(d.marks.map((m) => markKey(k, m)))].filter((x) => x !== v);
     else { cur.has(v) ? cur.delete(v) : cur.add(v); mh[k] = [...cur]; }
     setMarkHide(d, mh); return;
   }
