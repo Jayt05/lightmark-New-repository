@@ -671,15 +671,26 @@ $('desk').addEventListener('click', (e) => {
   const d = current(); if (!d) return;
   const mchip = e.target.closest('[data-mk]');
   if (mchip) {
-    const k = mchip.dataset.mk, v = mchip.dataset.mv, mh = { ...markHide(d) }, cur = new Set(mh[k] || []);
-    if (e.detail >= 2) mh[k] = [...new Set(d.marks.map((m) => markKey(k, m)))].filter((x) => x !== v);
-    else { cur.has(v) ? cur.delete(v) : cur.add(v); mh[k] = [...cur]; }
+    const k = mchip.dataset.mk, v = mchip.dataset.mv, mh = { ...markHide(d) }, cur = new Set(mh[k] || []), h = hiddenSet(d);
+    const nothingShowing = !d.marks.some((m) => markShown(d, m, h));
+    if (e.detail >= 2 || nothingShowing) {
+      // Show only this value, switching on every layer that has a matching light.
+      mh[k] = [...new Set(d.marks.map((m) => markKey(k, m)))].filter((x) => x !== v);
+      const ls = new Set(d.marks.filter((m) => markKey(k, m) === v).map((m) => m.l));
+      if (nothingShowing) { Object.keys(mh).forEach((x) => { if (x !== k) delete mh[x]; }); d.layers.forEach((l) => (ls.has(l.id) ? h.delete(l.id) : h.add(l.id))); }
+      else ls.forEach((id) => h.delete(id));
+      S.mhide[d.id] = mh; store('lm.mhide', S.mhide); setHidden(d, h); return;
+    }
+    cur.has(v) ? cur.delete(v) : cur.add(v); mh[k] = [...cur];
     setMarkHide(d, mh); return;
   }
   const chip = e.target.closest('.chip');
   if (chip) {
     const k = chip.dataset.fk, v = JSON.parse(chip.dataset.fv), ls = d.layers.filter((l) => l[k] === v), h = hiddenSet(d);
-    if (e.detail >= 2) { d.layers.forEach((l) => (ls.includes(l) ? h.delete(l.id) : h.add(l.id))); }
+    if (!d.marks.some((m) => markShown(d, m, h))) {
+      // Nothing is showing: switch on just these layers and clear the light filters so their lights appear.
+      S.mhide[d.id] = {}; store('lm.mhide', S.mhide); d.layers.forEach((l) => (ls.includes(l) ? h.delete(l.id) : h.add(l.id)));
+    } else if (e.detail >= 2) { d.layers.forEach((l) => (ls.includes(l) ? h.delete(l.id) : h.add(l.id))); }
     else { const allOn = ls.every((l) => !h.has(l.id)); ls.forEach((l) => (allOn ? h.add(l.id) : h.delete(l.id))); }
     setHidden(d, h); return;
   }
