@@ -150,6 +150,8 @@ header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; pad
 .note { font-size: 12px; color: var(--muted); }
 .markedit { display: grid; gap: 6px; padding: 8px; border: 1px dashed var(--accent); border-radius: 6px; }
 .markedit .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.mfields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.mfields label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); }
 .markedit input, .markedit select { border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; background: var(--bg); min-width: 0; }
 
 /* progress + toast */
@@ -328,7 +330,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function toast(msg, ms = 3200) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), ms); }
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null'); localStorage.setItem(k, JSON.stringify(v)); } catch { return null; } }
-S.hidden = store('lm.hidden') || {}; S.clean = !!store('lm.clean'); S.labels = store('lm.labels') ?? true;
+S.hidden = store('lm.hidden') || {}; S.mhide = store('lm.mhide') || {}; S.clean = !!store('lm.clean'); S.labels = store('lm.labels') ?? true;
 
 function allDrawings() { return [...S.local, ...S.drawings]; }
 function current() { return allDrawings().find((d) => d.id === S.cur) || null; }
@@ -352,6 +354,12 @@ function tidyLayers(d) { d.layers.forEach((l) => ['name', 'bulb', 'cap', 'finish
 function specLine(l) { return [l.watt ? l.watt + 'W' : '', l.volt ? l.volt + 'V' : '', l.bulb, l.cap, l.finish].filter(Boolean).join(' · '); }
 function hiddenSet(d) { return new Set(S.hidden[d.id] || []); }
 function setHidden(d, set) { S.hidden[d.id] = [...set]; store('lm.hidden', S.hidden); render(); }
+// Per-light details. Battery, soca and universe can be used as filters; '' stands for lights with the box left empty.
+const MARK_FIELDS = [['bat', 'Battery', 'e.g. B1', true], ['soca', 'Soca', 'e.g. S3', true], ['addr', 'Address', 'e.g. 101', false], ['uni', 'Universe', 'e.g. 1', true]];
+function markHide(d) { return S.mhide[d.id] || {}; }
+function setMarkHide(d, mh) { S.mhide[d.id] = mh; store('lm.mhide', S.mhide); render(); }
+function markShown(d, m, hid) { const mh = markHide(d); return !hid.has(m.l) && MARK_FIELDS.every(([k]) => !(mh[k] || []).includes(m[k] || '')); }
+function markDetails(m) { return MARK_FIELDS.filter(([k]) => m[k]).map(([k, name]) => `${name} ${m[k]}`).join(' · '); }
 
 /* ---------- rendering ---------- */
 function dwgButton(d) {
@@ -401,7 +409,7 @@ function renderStage() {
   $('stage').classList.toggle('editing', S.edit);
   const svg = $('svg'); svg.setAttribute('viewBox', `0 0 ${d.w} ${d.h}`); svg.setAttribute('width', d.w); svg.setAttribute('height', d.h);
   const hid = hiddenSet(d), R = Math.max(d.w, d.h) * 0.011, byId = Object.fromEntries(d.layers.map((l) => [l.id, l]));
-  svg.innerHTML = d.marks.filter((m) => byId[m.l] && !hid.has(m.l)).map((m) => {
+  svg.innerHTML = d.marks.filter((m) => byId[m.l] && markShown(d, m, hid)).map((m) => {
     const l = byId[m.l], cx = m.x * d.w, cy = m.y * d.h, Q = R * 0.5 * (m.ss || 1), T = R * (m.ts || 1);
     return `<g class="mk ${S.sel === m.id ? 'sel' : ''}" data-id="${m.id}">
       <rect class="hit" x="${cx - Math.max(R, Q)}" y="${cy - Math.max(R, Q)}" width="${Math.max(R, Q) * 2}" height="${Math.max(R, Q) * 2}"/>
@@ -426,7 +434,11 @@ function renderDesk() {
   if (!d) { desk.innerHTML = `<div class="sect"><div class="label">Layers</div><p class="note">Each light colour on the drawing becomes a layer you can switch on and off. Filters group layers by wattage, voltage, bulb and cap.</p></div>`; return; }
   const hid = hiddenSet(d), counts = {}, editable = canEditDrawing(d);
   d.marks.forEach((m) => (counts[m.l] = (counts[m.l] || 0) + 1));
-  const visibleLights = d.marks.filter((m) => !hid.has(m.l)).length;
+  const visibleLights = d.marks.filter((m) => markShown(d, m, hid)).length;
+  const mh = markHide(d), mfv = MARK_FIELDS.filter((f) => f[3]).map(([k, name]) => {
+    const vals = [...new Set(d.marks.map((m) => m[k] || ''))].sort((a, b) => (a === '') - (b === '') || a.localeCompare(b, undefined, { numeric: true }));
+    return { k, name, vals };
+  }).filter((a) => a.vals.length > 1 || (a.vals.length === 1 && a.vals[0] !== ''));
   const fv = filterValues(d);
   const sm = S.sel && d.marks.find((m) => m.id === S.sel);
   desk.innerHTML = `
@@ -443,15 +455,17 @@ function renderDesk() {
       </div>`).join('')}
     ${S.edit ? `<button class="btn small" data-act="addl">Add layer</button>` : ''}
   </div>
-  ${fv.length ? `<div class="sect"><div class="label">Filter by</div>${fv.map((a) => `
+  ${fv.length || mfv.length ? `<div class="sect"><div class="label">Filter by</div>${fv.map((a) => `
     <div class="fgroup"><span>${a.name}</span><div class="chips">${a.vals.map((o) => {
       const ls = d.layers.filter((l) => l[a.k] === o.v), on = ls.filter((l) => !hid.has(l.id)).length;
       return `<button class="chip ${on === ls.length ? 'on' : on ? 'part' : ''}" data-fk="${a.k}" data-fv="${esc(JSON.stringify(o.v))}" title="Click to switch these layers on or off. Double-click to show only these.">${esc(o.text)}</button>`;
-    }).join('')}</div></div>`).join('')}<p class="note">Click a value to switch its lights on or off. Double-click to show only that value.</p></div>` : ''}
+    }).join('')}</div></div>`).join('')}${mfv.map((a) => `
+    <div class="fgroup"><span>${a.name}</span><div class="chips">${a.vals.map((v) => `<button class="chip ${(mh[a.k] || []).includes(v) ? '' : 'on'}" data-mk="${a.k}" data-mv="${esc(v)}" title="Click to switch these lights on or off. Double-click to show only these.">${v === '' ? 'None' : esc(v)}</button>`).join('')}</div></div>`).join('')}<p class="note">Click a value to switch its lights on or off. Double-click to show only that value.</p></div>` : ''}
   ${S.edit ? `<div class="sect"><div class="label">Editing</div>
     ${sm ? `<div class="markedit"><div class="row"><b>Selected light</b></div>
       <div class="row"><select id="selLayer">${d.layers.map((l) => `<option value="${l.id}" ${l.id === sm.l ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>
       <input id="selLabel" placeholder="Label, e.g. 9.3" value="${esc(sm.label || '')}" size="8"></div>
+      <div class="mfields">${MARK_FIELDS.map(([k, name, ph]) => `<label>${name}<input data-mf="${k}" placeholder="${ph}" value="${esc(sm[k] || '')}" autocapitalize="characters"></label>`).join('')}</div>
       <div class="row"><button class="btn small danger" data-act="delmark">Remove light</button><button class="btn small" data-act="desel">Done</button></div></div>`
     : `<p class="note">Click the drawing to add a light to the highlighted layer. Click a light to change its layer or label.</p>`}
     ${S.canWrite || d.localUrl ? `<button class="btn small" data-act="redetect">Re-detect lights</button>` : ''}
@@ -569,7 +583,7 @@ function zoomAt(f, px, py) {
 function stageClick(e, target) {
   const d = current(); if (!d) return;
   const g = target.closest && target.closest('.mk');
-  if (!S.edit) { if (g) { const m = d.marks.find((x) => x.id === g.dataset.id), l = m && d.layers.find((x) => x.id === m.l); if (l) toast(`${m.label ? m.label + ' · ' : ''}${l.name}${specLine(l) ? ' · ' + specLine(l) : ''}`); } return; }
+  if (!S.edit) { if (g) { const m = d.marks.find((x) => x.id === g.dataset.id), l = m && d.layers.find((x) => x.id === m.l); if (l) toast(`${m.label ? m.label + ' · ' : ''}${l.name}${specLine(l) ? ' · ' + specLine(l) : ''}${markDetails(m) ? ' · ' + markDetails(m) : ''}`); } return; }
   if (g) { S.sel = g.dataset.id; render(); return; }
   if (!S.activeLayer || !d.layers.some((l) => l.id === S.activeLayer)) { toast('Pick a layer first: choose "Add marks here" on a layer.'); return; }
   const r = $('stage').getBoundingClientRect(), v = S.view;
@@ -623,6 +637,11 @@ $('desk').addEventListener('change', (e) => {
     l[k] = v === '' ? null : v; if (k === 'name' && !l.name) l.name = 'Untitled layer';
     changed(d); renderStage(); renderRail(); return;
   }
+  if (t.dataset.mf) {
+    const m = d.marks.find((x) => x.id === S.sel); if (!m) return;
+    const v = t.value.trim().slice(0, 24); if (v) m[t.dataset.mf] = v; else delete m[t.dataset.mf];
+    changed(d); render(); return;
+  }
   if (t.id === 'selLayer' || t.id === 'selLabel') {
     const m = d.marks.find((x) => x.id === S.sel); if (!m) return;
     if (t.id === 'selLayer') m.l = t.value; else m.label = t.value.trim().slice(0, 24);
@@ -631,6 +650,13 @@ $('desk').addEventListener('change', (e) => {
 });
 $('desk').addEventListener('click', (e) => {
   const d = current(); if (!d) return;
+  const mchip = e.target.closest('[data-mk]');
+  if (mchip) {
+    const k = mchip.dataset.mk, v = mchip.dataset.mv, mh = { ...markHide(d) }, cur = new Set(mh[k] || []);
+    if (e.detail >= 2) mh[k] = [...new Set(d.marks.map((m) => m[k] || ''))].filter((x) => x !== v);
+    else { cur.has(v) ? cur.delete(v) : cur.add(v); mh[k] = [...cur]; }
+    setMarkHide(d, mh); return;
+  }
   const chip = e.target.closest('.chip');
   if (chip) {
     const k = chip.dataset.fk, v = JSON.parse(chip.dataset.fv), ls = d.layers.filter((l) => l[k] === v), h = hiddenSet(d);
@@ -640,7 +666,7 @@ $('desk').addEventListener('click', (e) => {
   }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act;
-  if (act === 'all') setHidden(d, new Set());
+  if (act === 'all') { S.mhide[d.id] = {}; store('lm.mhide', S.mhide); setHidden(d, new Set()); }
   if (act === 'none') setHidden(d, new Set(d.layers.map((l) => l.id)));
   if (act === 'active') { S.activeLayer = b.dataset.l; render(); }
   if (act === 'editl') { S.editLayer = b.dataset.l; render(); }
