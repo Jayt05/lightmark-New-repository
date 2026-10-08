@@ -385,7 +385,7 @@ function renderRail() {
   html += sections.map((f) => {
     const closed = folderClosed(f.id || '_unfiled');
     let head;
-    if (f.id && S.renaming === f.id) head = `<input id="frename" value="${esc(f.name)}" data-fid="${esc(f.id)}" aria-label="Folder name" maxlength="60"><button class="iconbtn" data-fact="renok" data-fid="${esc(f.id)}">Save</button>`;
+    if (f.id && S.renaming === f.id) head = `<input id="frename" autocapitalize="sentences" value="${esc(f.name)}" data-fid="${esc(f.id)}" aria-label="Folder name" maxlength="60"><button class="iconbtn" data-fact="renok" data-fid="${esc(f.id)}">Save</button>`;
     else if (f.id && S.confirmFolder === f.id) head = `<span class="note" style="flex:1">Delete “${esc(f.name)}”? Its drawings move to Unfiled.</span><button class="iconbtn" data-fact="delok" data-fid="${esc(f.id)}" style="color:var(--danger)">Delete</button><button class="iconbtn" data-fact="delno">Keep</button>`;
     else head = `<button class="ftoggle" data-fact="toggle" data-fid="${esc(f.id || '_unfiled')}" aria-expanded="${!closed}"><span class="chev">▼</span><span class="n">${esc(f.name)}</span></button><span class="ct">${f.items.length}</span>${f.id ? `<button class="iconbtn" data-fact="ren" data-fid="${esc(f.id)}" title="Rename folder" aria-label="Rename folder">✎</button><button class="iconbtn" data-fact="del" data-fid="${esc(f.id)}" title="Delete folder" aria-label="Delete folder">✕</button>` : ''}`;
     return `<div class="folder ${closed ? 'closed' : ''}"><div class="fhead" data-drop="${esc(f.id)}">${head}</div><div class="fitems">${f.items.length ? f.items.map(dwgButton).join('') : `<p class="note" style="margin:4px 0">${f.id ? 'Drag drawings here, or pick this folder under Drawing on the right.' : 'Nothing unfiled.'}</p>`}</div></div>`;
@@ -480,7 +480,7 @@ function renderDesk() {
     ${S.canWrite || d.localUrl ? `<button class="btn small" data-act="redetect">Re-detect lights</button>` : ''}
   </div>` : ''}
   <div class="sect"><div class="label">Drawing</div>
-    ${editable && !d.localUrl ? `<label class="dfield">Name<input id="dname-in" value="${esc(d.name)}" maxlength="120"></label>` : ''}
+    ${editable && !d.localUrl ? `<label class="dfield">Name<input id="dname-in" autocapitalize="sentences" value="${esc(d.name)}" maxlength="120"></label>` : ''}
     ${S.hasFolders && !d.localUrl ? `<label class="dfield">Folder<select id="dfolder"><option value="">Unfiled</option>${S.folders.map((f) => `<option value="${esc(f.id)}" ${d.folder === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>` : ''}
     <div class="note">${d.ai ? 'Layers were set up from the drawing’s legend.' : 'Lights are grouped by colour. Turn on Edit marks to name each layer from your legend, and delete any layer that picked up something that isn’t a light.'} ${d.localUrl ? 'This drawing hasn’t been saved and will be gone when you close the page.' : ''}</div>
     ${editable && !d.localUrl && S.canAdmin ? (S.confirmDel ? `<div class="confirm">Delete this drawing for everyone? <button class="btn small danger" data-act="delyes">Delete</button><button class="btn small" data-act="delno">Keep</button></div>` : `<button class="btn small danger" data-act="del">Delete drawing</button>`) : ''}
@@ -627,7 +627,7 @@ async function flush(id) {
 
 /* ---------- desk events ---------- */
 $('desk').addEventListener('input', (e) => {
-  const t = e.target, k = t.id === 'selLabel' || (t.dataset && t.dataset.mf) ? 'name' : t.dataset && t.dataset.f;
+  const t = e.target, k = t.id === 'selLabel' || t.id === 'dname-in' || (t.dataset && t.dataset.mf) ? 'name' : t.dataset && t.dataset.f;
   if (!k || t.type !== 'text' && t.type !== '') return;
   const v = fixCase(k, t.value); if (v === t.value) return;
   const a = t.selectionStart, b = t.selectionEnd; t.value = v; t.setSelectionRange(a, b);
@@ -637,7 +637,7 @@ $('desk').addEventListener('change', (e) => {
   const t = e.target;
   if (t.dataset.toggle) { const h = hiddenSet(d); t.checked ? h.delete(t.dataset.toggle) : h.add(t.dataset.toggle); setHidden(d, h); return; }
   if (t.id === 'dfolder') { moveToFolder(d, t.value); return; }
-  if (t.id === 'dname-in') { d.name = t.value.trim().slice(0, 120) || d.name; changed(d); renderRail(); $('dname').textContent = d.name; return; }
+  if (t.id === 'dname-in') { d.name = fixCase('name', t.value.trim().slice(0, 120)) || d.name; changed(d); renderRail(); $('dname').textContent = d.name; return; }
   if (t.dataset.merge && t.value) {
     const from = t.dataset.merge, to = t.value;
     d.marks.forEach((m) => { if (m.l === from) m.l = to; });
@@ -731,7 +731,7 @@ $('rail').addEventListener('click', async (e) => {
 });
 async function finishRename() {
   const i = $('frename'); if (!i) return;
-  const id = i.dataset.fid, name = i.value.trim().slice(0, 60) || 'Untitled folder', f = S.folders.find((x) => x.id === id);
+  const id = i.dataset.fid, name = fixCase('name', i.value.trim().slice(0, 60)) || 'Untitled folder', f = S.folders.find((x) => x.id === id);
   S.renaming = null;
   if (f && f.name !== name) { f.name = name; try { await API.renameFolder(id, name); } catch { toast('Couldn’t rename the folder. Try again.'); } }
   render();
@@ -740,6 +740,11 @@ $('rail').addEventListener('keydown', (e) => {
   if (e.target.id !== 'frename') return;
   if (e.key === 'Enter') { e.preventDefault(); finishRename(); }
   if (e.key === 'Escape') { S.renaming = null; renderRail(); }
+});
+$('rail').addEventListener('input', (e) => {
+  const t = e.target; if (t.id !== 'frename') return;
+  const v = fixCase('name', t.value); if (v === t.value) return;
+  const a = t.selectionStart, b = t.selectionEnd; t.value = v; t.setSelectionRange(a, b);
 });
 $('rail').addEventListener('focusout', (e) => { if (e.target.id === 'frename' && !(e.relatedTarget && e.relatedTarget.dataset && e.relatedTarget.dataset.fact === 'renok')) finishRename(); });
 async function moveToFolder(d, folder) {
@@ -802,7 +807,7 @@ async function pdfPages(file) {
   return { pages: out, total: pdf.numPages };
 }
 async function ingest(file) {
-  const base = file.name.replace(/\.[^.]+$/, '') || 'Drawing';
+  const base = fixCase('name', file.name.replace(/\.[^.]+$/, '')) || 'Drawing';
   const steps = { title: base, items: [{ t: 'Reading file' }, { t: 'Finding coloured marks' }, { t: 'Saving for everyone with the link' }] };
   const step = (i, st = 'now') => { steps.items.forEach((s, j) => (s.st = j < i ? 'done' : j === i ? st : '')); progress(steps); };
   step(0);
