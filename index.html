@@ -357,7 +357,7 @@ function specLine(l) { return [l.watt ? l.watt + 'W' : '', l.volt ? l.volt + 'V'
 function hiddenSet(d) { return new Set(S.hidden[d.id] || []); }
 function setHidden(d, set) { S.hidden[d.id] = [...set]; store('lm.hidden', S.hidden); render(); }
 // Per-light details. Battery, soca and universe can be used as filters; '' stands for lights with the box left empty.
-const MARK_FIELDS = [['bat', 'Battery', 'e.g. B1', true], ['soca', 'Soca', 'e.g. S3', true], ['addr', 'Address', 'e.g. 101', false], ['uni', 'Universe', 'e.g. 1', true]];
+const MARK_FIELDS = [['bat', 'Battery', 'e.g. B1', true], ['soca', 'Soca', 'e.g. S3', true], ['uni', 'Universe', 'e.g. 1', true], ['addr', 'Address', 'e.g. 101', false]];
 // Value a light is filtered under. Soca groups by the part before the dot, so 13.4 and 13.5 both file under 13.
 function markKey(k, m) { const v = m[k] || ''; return k === 'soca' ? v.split('.')[0].trim() : v; }
 function markHide(d) { return S.mhide[d.id] || {}; }
