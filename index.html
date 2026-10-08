@@ -374,7 +374,8 @@ function dwgButton(d) {
 }
 function folderClosed(id) { return (store('lm.closed') || []).includes(id); }
 function renderRail() {
-  const list = allDrawings();
+  // A–Z within each folder, with numbers in natural order (2 before 10).
+  const list = allDrawings().slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' }));
   let html = `<div class="rail-h"><span class="label">Drawings · ${list.length}</span>${S.hasFolders ? '<button class="linkbtn" data-fact="new">New folder</button>' : ''}</div>`;
   if (!list.length && !S.folders.length) { $('rail').innerHTML = html + `<p class="note">Nothing uploaded yet.</p>`; return; }
   const known = new Set(S.folders.map((f) => f.id));
