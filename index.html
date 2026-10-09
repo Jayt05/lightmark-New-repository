@@ -221,6 +221,8 @@ header.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; pad
         <button class="btn small" id="labels">Labels</button>
         <button class="btn small" id="move" hidden aria-pressed="false" title="When on, drag labels and lights to reposition them. Turn off to avoid moving them by accident.">Move lights &amp; labels: locked</button>
         <button class="btn small" id="resize" hidden aria-pressed="false" title="When on, drag a light or label up/right to make it bigger, down/left to make it smaller. Double-click or double-tap resets it.">Resize: locked</button>
+        <button class="btn small" id="rotl" hidden title="Rotate the drawing a quarter turn anticlockwise" aria-label="Rotate anticlockwise">⟲</button>
+        <button class="btn small" id="rotr" hidden title="Rotate the drawing a quarter turn clockwise" aria-label="Rotate clockwise">⟳</button>
         <button class="btn small" id="edit" hidden>Edit marks</button>
       </div>
       <div class="stage" id="stage">
@@ -409,6 +411,7 @@ function renderStage() {
   $('edit').hidden = !canEditDrawing(d); $('move').hidden = !canEditDrawing(d);
   $('move').classList.toggle('on', S.move); $('move').textContent = S.move ? 'Move lights & labels: on' : 'Move lights & labels: locked'; $('move').setAttribute('aria-pressed', S.move);
   $('stage').classList.toggle('moving', S.move);
+  $('rotl').hidden = $('rotr').hidden = !canEditDrawing(d) || !!d.localUrl;
   $('resize').hidden = !canEditDrawing(d); $('resize').classList.toggle('on', S.resize); $('resize').textContent = S.resize ? 'Resize: on' : 'Resize: locked'; $('resize').setAttribute('aria-pressed', S.resize);
   $('stage').classList.toggle('resizing', S.resize);
   $('stage').classList.toggle('editing', S.edit);
@@ -785,6 +788,30 @@ function progress(steps) {
   p.innerHTML = `<div class="label">${esc(steps.title)}</div><ol>${steps.items.map((s) => `<li class="${s.st || ''}">${esc(s.t)}</li>`).join('')}</ol>`;
 }
 function loadImage(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+/* Turn a drawing a quarter turn (dir 1 = clockwise, -1 = anticlockwise), carrying its lights and labels with it. */
+async function rotateDrawing(d, dir) {
+  if (S.rotating) return; S.rotating = true;
+  const btns = [$('rotl'), $('rotr')]; btns.forEach((b) => (b.disabled = true));
+  try {
+    const src = S.img[d.id] || (await API.image(d.id)); if (!src) throw new Error('no image');
+    const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+    const w = im.naturalWidth, h = im.naturalHeight, c = document.createElement('canvas'); c.width = h; c.height = w;
+    const x = c.getContext('2d'); x.translate(h / 2, w / 2); x.rotate(dir * Math.PI / 2); x.drawImage(im, -w / 2, -h / 2);
+    const image = c.toDataURL('image/jpeg', 0.92), thumb = toCanvas(c, 180).toDataURL('image/jpeg', 0.7);
+    const marks = d.marks.map((m) => {
+      const n = { ...m };
+      if (dir > 0) { n.x = +(1 - m.y).toFixed(4); n.y = m.x; if (m.lx != null) { n.lx = -m.ly; n.ly = m.lx; } }
+      else { n.x = m.y; n.y = +(1 - m.x).toFixed(4); if (m.lx != null) { n.lx = m.ly; n.ly = -m.lx; } }
+      return n;
+    });
+    await API.req('drawing_images?id=eq.' + encodeURIComponent(d.id), { method: 'PATCH', body: JSON.stringify({ data: image }), headers: { Prefer: 'return=minimal' } });
+    await API.req('drawings?id=eq.' + encodeURIComponent(d.id), { method: 'PATCH', body: JSON.stringify({ w: d.h, h: d.w, thumb, marks }), headers: { Prefer: 'return=minimal' } });
+    Object.assign(d, { w: d.h, h: d.w, thumb, marks }); S.img[d.id] = image; S.needFit = true; render();
+  } catch { toast('Couldn’t rotate the drawing. Check your connection and try again.'); }
+  finally { S.rotating = false; btns.forEach((b) => (b.disabled = false)); }
+}
+$('rotl').onclick = () => { const d = current(); if (d) rotateDrawing(d, -1); };
+$('rotr').onclick = () => { const d = current(); if (d) rotateDrawing(d, 1); };
 function toCanvas(src, maxSide) {
   const w = src.naturalWidth || src.width, h = src.naturalHeight || src.height, s = Math.min(1, maxSide / Math.max(w, h));
   const c = document.createElement('canvas'); c.width = Math.round(w * s); c.height = Math.round(h * s);
@@ -906,7 +933,8 @@ async function refresh() {
   S.drawings = rows.map((r) => {
     // Keep our own copy of a drawing that is being saved, or that is open while editing, moving or resizing.
     const st = saving[r.id], busy = (st && (st.busy || st.dirty)) || (r.id === S.cur && (S.edit || S.move || S.resize));
-    const mine = busy && S.drawings.find((x) => x.id === r.id);
+    const mine = busy && S.drawings.find((x) => x.id === r.id), old = S.drawings.find((x) => x.id === r.id);
+    if (old && !mine && (old.w !== r.w || old.h !== r.h || old.thumb !== r.thumb)) { delete S.img[r.id]; if (r.id === S.cur) S.needFit = true; }
     return mine || { layers: [], marks: [], ...r };
   });
   const last = store('lm.cur');
