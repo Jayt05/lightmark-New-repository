@@ -350,11 +350,17 @@ function thumbSrc(d) { return d.localUrl || d.thumb || S.img[d.id] || ''; }
 // Detail fields: first letter capitalised, cap type all capitals.
 function fixCase(k, v) {
   if (typeof v !== 'string' || !v) return v;
-  if (k === 'cap') return v.toUpperCase();
+  if (k === 'cap' || k === 'bat') return v.toUpperCase();
   if (k === 'name' || k === 'bulb' || k === 'finish') return v.charAt(0).toUpperCase() + v.slice(1);
   return v;
 }
-function tidyLayers(d) { d.layers.forEach((l) => ['name', 'bulb', 'cap', 'finish'].forEach((k) => { if (l[k]) l[k] = fixCase(k, l[k]); })); }
+function tidyLayers(d) {
+  d.layers.forEach((l) => ['name', 'bulb', 'cap', 'finish'].forEach((k) => { if (l[k]) l[k] = fixCase(k, l[k]); }));
+  // Battery is always capitals; fix any older entries and save them once.
+  let fixed = false;
+  d.marks.forEach((m) => { if (m.bat && m.bat !== m.bat.toUpperCase()) { m.bat = m.bat.toUpperCase(); fixed = true; } });
+  if (fixed && canEditDrawing(d)) changed(d);
+}
 function specLine(l) { return [l.watt ? l.watt + 'W' : '', l.volt ? l.volt + 'V' : '', l.bulb, l.cap, l.finish].filter(Boolean).join(' · '); }
 function hiddenSet(d) { return new Set(S.hidden[d.id] || []); }
 function setHidden(d, set) { S.hidden[d.id] = [...set]; store('lm.hidden', S.hidden); render(); }
@@ -631,7 +637,7 @@ async function flush(id) {
 
 /* ---------- desk events ---------- */
 $('desk').addEventListener('input', (e) => {
-  const t = e.target, k = t.id === 'selLabel' || t.id === 'dname-in' || (t.dataset && t.dataset.mf) ? 'name' : t.dataset && t.dataset.f;
+  const t = e.target, k = t.dataset && t.dataset.mf === 'bat' ? 'bat' : t.id === 'selLabel' || t.id === 'dname-in' || (t.dataset && t.dataset.mf) ? 'name' : t.dataset && t.dataset.f;
   if (!k || t.type !== 'text' && t.type !== '') return;
   const v = fixCase(k, t.value); if (v === t.value) return;
   const a = t.selectionStart, b = t.selectionEnd; t.value = v; t.setSelectionRange(a, b);
@@ -657,7 +663,7 @@ $('desk').addEventListener('change', (e) => {
   }
   if (t.dataset.mf) {
     const m = d.marks.find((x) => x.id === S.sel); if (!m) return;
-    const v = fixCase('name', t.value.trim().slice(0, 24)); if (v) m[t.dataset.mf] = v; else delete m[t.dataset.mf];
+    const v = fixCase(t.dataset.mf === 'bat' ? 'bat' : 'name', t.value.trim().slice(0, 24)); if (v) m[t.dataset.mf] = v; else delete m[t.dataset.mf];
     changed(d); setTimeout(render); return;
   }
   if (t.id === 'selLabelShow') {
