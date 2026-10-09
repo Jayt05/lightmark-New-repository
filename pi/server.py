@@ -8,7 +8,7 @@ Run:  python3 server.py --set-password      (once, to choose the password)
 It answers the same small set of requests the page makes to Supabase, so the
 page works unchanged. Only the Python standard library is used.
 """
-import argparse, getpass, hashlib, hmac, json, os, re, secrets, sqlite3, sys, threading, time, uuid
+import argparse, getpass, hashlib, hmac, json, os, re, secrets, sqlite3, sys, threading, uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -27,39 +27,6 @@ TABLES = {
 }
 JSON_COLS = {'layers', 'marks'}
 lock = threading.Lock()
-
-# Wrong-password lockout: after FAIL_LIMIT wrong tries from one device, refuse it for LOCK_SECS.
-FAIL_LIMIT = 5
-LOCK_SECS = 15 * 60
-fails = {}  # ip -> {'n': wrong tries, 'first': time of first, 'until': locked until}
-fails_lock = threading.Lock()
-
-
-def locked_for(ip):
-    with fails_lock:
-        f = fails.get(ip)
-        if not f:
-            return 0
-        now = time.time()
-        if f['until'] > now:
-            return int(f['until'] - now) + 1
-        if now - f['first'] > LOCK_SECS:
-            fails.pop(ip, None)
-        return 0
-
-
-def note_attempt(ip, ok):
-    with fails_lock:
-        if ok:
-            fails.pop(ip, None)
-            return
-        now = time.time()
-        f = fails.get(ip)
-        if not f or now - f['first'] > LOCK_SECS:
-            f = fails[ip] = {'n': 0, 'first': now, 'until': 0}
-        f['n'] += 1
-        if f['n'] >= FAIL_LIMIT:
-            f['until'] = now + LOCK_SECS
 
 
 def db():
@@ -150,14 +117,7 @@ class Handler(BaseHTTPRequestHandler):
         if not url.path.startswith('/rest/v1/'):
             return self.send(404, {'message': 'not found'})
         name = url.path[len('/rest/v1/'):]
-        ip = self.client_address[0]
-        wait = locked_for(ip)
-        if wait:
-            return self.send(429, {'message': 'locked', 'retry': wait})
-        given = (self.headers.get('x-lightmark-pass') or '').strip()
-        pw_ok = password_ok(given)
-        if given:
-            note_attempt(ip, pw_ok)
+        pw_ok = password_ok((self.headers.get('x-lightmark-pass') or '').strip())
         if name == 'rpc/lm_pass_ok':
             return self.send(200, pw_ok)
         if name not in TABLES:
