@@ -9,7 +9,7 @@ Upload photos, scans or PDFs of set and lighting drawings marked up with coloure
 
 ## Setup
 
-1. In Supabase, open SQL Editor, paste in `supabase-setup.sql` and run it. To change the password, edit `'potter'` in that file and run it again.
+1. In Supabase, open SQL Editor, paste in `supabase-setup.sql` and run it. To change the password, replace `'change-me'` in that file with your own password (lower case) and run it again.
 2. If you set the database up before folders existed, also run `supabase-folders.sql` once.
 3. Put the Supabase Project URL and anon public key into `CONFIG` near the bottom of `index.html`.
 4. In GitHub, go to Settings → Pages, set Source to "Deploy from a branch", pick `main` and `/ (root)`, and save.
