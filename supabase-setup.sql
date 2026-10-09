@@ -25,10 +25,10 @@ create table if not exists public.drawing_images (
   data text not null
 );
 
--- To change the password later, replace 'change-me' below with your password (keep it lower case) and run this statement again.
+-- To change the password later, replace 'change-me' below with your password (upper and lower case count) and run this statement again.
 create or replace function public.lm_pass_ok() returns boolean
 language sql stable as $$
-  select lower(coalesce(current_setting('request.headers', true)::json ->> 'x-lightmark-pass', '')) = 'change-me'
+  select coalesce(current_setting('request.headers', true)::json ->> 'x-lightmark-pass', '') = 'change-me'
 $$;
 grant execute on function public.lm_pass_ok() to anon;
 
